@@ -60,12 +60,6 @@ export const customerCreationSchema = z.object({
   panchayat_id: optionalString,
   is_active: z.boolean(),
   is_bulkwaste_generator: z.boolean(),
-  apartment_name: optionalString,
-  block_no: optionalString,
-  flat_no: optionalString,
-  villa_no: optionalString,
-  industry_name: optionalString,
-  industry_type: optionalString,
 });
 
 export type CustomerCreationFormValues = z.infer<typeof customerCreationSchema>;

@@ -852,6 +852,8 @@ export default function TripPlanForm() {
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
+    const triggerWeightValue = formData.trip_trigger_weight_kg.trim();
+    const maxCapacityValue = formData.max_vehicle_capacity_kg.trim();
     const triggerWeight = Number(formData.trip_trigger_weight_kg);
     const maxCapacity = Number(formData.max_vehicle_capacity_kg);
     const isAutoAssignMode = formData.collection_type !== "bin_collection";
@@ -893,7 +895,21 @@ export default function TripPlanForm() {
       Swal.fire(t("common.warning"), "At least one ward is required.", "warning");
       return;
     }
+    if (!triggerWeightValue || !maxCapacityValue) {
+      setFieldErrors((current) => ({
+        ...current,
+        ...(!triggerWeightValue ? { trip_trigger_weight_kg: "Trigger weight is required." } : {}),
+        ...(!maxCapacityValue ? { max_vehicle_capacity_kg: "Vehicle capacity is required." } : {}),
+      }));
+      Swal.fire(t("common.warning"), "Enter both trigger weight and vehicle capacity.", "warning");
+      return;
+    }
     if (!Number.isFinite(triggerWeight) || !Number.isFinite(maxCapacity) || triggerWeight >= maxCapacity) {
+      setFieldErrors((current) => ({
+        ...current,
+        trip_trigger_weight_kg: "Must be lower than vehicle capacity.",
+        max_vehicle_capacity_kg: "Must be greater than trigger weight.",
+      }));
       Swal.fire(t("common.warning"), "Trigger weight must be less than vehicle capacity.", "warning");
       return;
     }
@@ -1060,8 +1076,8 @@ export default function TripPlanForm() {
               <FieldError message={fieldErrors.waste_type_ids} />
             </div>
             <div><Label>Start Time</Label><Input type="time" value={formData.scheduled_time} onChange={(e) => setField("scheduled_time")(e.target.value)} disabled={!projectId} /><FieldError message={fieldErrors.scheduled_time} /></div>
-            <div><Label>Trigger Weight (kg)</Label><Input type="number" min={0} value={formData.trip_trigger_weight_kg} onChange={(e) => setField("trip_trigger_weight_kg")(e.target.value)} /></div>
-            <div><Label>Max Vehicle Capacity (kg)</Label><Input type="number" min={0} value={formData.max_vehicle_capacity_kg} onChange={(e) => setField("max_vehicle_capacity_kg")(e.target.value)} /></div>
+            <div><Label>Max Vehicle Capacity (kg)</Label><Input type="number" min={1} required value={formData.max_vehicle_capacity_kg} onChange={(e) => setField("max_vehicle_capacity_kg")(e.target.value)} /><FieldError message={fieldErrors.max_vehicle_capacity_kg} /></div>
+            <div><Label>Trigger Weight (kg)</Label><Input type="number" min={0} required value={formData.trip_trigger_weight_kg} onChange={(e) => setField("trip_trigger_weight_kg")(e.target.value)} /><FieldError message={fieldErrors.trip_trigger_weight_kg} /></div>
             <div><Label>Status</Label><Select value={formData.status} onChange={setField("status")} options={statusOptions} disabled={loading} /></div>
             <div><Label>Approval Status</Label><Select value={formData.approval_status} onChange={setField("approval_status")} options={approvalStatusOptions} disabled={loading} /></div>
           </div>
@@ -1090,28 +1106,18 @@ export default function TripPlanForm() {
               </div>
             </div>
 
-            {formData.collection_type === "bulk_waste_collection" ? (
-              <div className="rounded-md border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
-                Bulk waste stops are generated automatically for bulk-waste-generator customers under
-                this Trip Plan's ward/panchayat scope — no manual stop list is needed here.
-                {(formData.panchayat_id || formData.zone_id) && (
-                  <span className="ml-1 font-semibold text-green-700">
-                    {autoAssignCustomers.length} matching customer{autoAssignCustomers.length === 1 ? "" : "s"} found.
-                  </span>
-                )}
-              </div>
-            ) : formData.collection_type === "household_collection" ? (
+            {formData.collection_type !== "bin_collection" ? (
               <div className="space-y-3">
                 <div className="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-gray-700">
                   {formData.panchayat_id || formData.zone_id ? (
                     <>
                       <span className="font-semibold text-green-700">
-                        All {autoAssignCustomers.length} household customer{autoAssignCustomers.length === 1 ? "" : "s"}
+                        All {autoAssignCustomers.length} {formData.collection_type === "bulk_waste_collection" ? "bulk-waste-generator" : "household"} customer{autoAssignCustomers.length === 1 ? "" : "s"}
                       </span>{" "}
                       in this ward/local body will be auto-assigned as stops for this trip — no manual list needed.
                     </>
                   ) : (
-                    "Select a Zone or PLB (Panchayat) first — every household customer under it will be auto-assigned as a stop."
+                    `Select a Zone or PLB (Panchayat) first — every ${formData.collection_type === "bulk_waste_collection" ? "bulk-waste-generator" : "household"} customer under it will be auto-assigned as a stop.`
                   )}
                 </div>
 

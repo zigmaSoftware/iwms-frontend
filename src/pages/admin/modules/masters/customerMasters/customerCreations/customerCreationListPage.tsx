@@ -80,8 +80,6 @@ const toRecordList = (value: unknown): Customer[] => {
 const CUSTOMER_CREATION_COLUMN_FIELDS: Record<string, string[]> = {
   customer_name: ["customer_name", "name"],
   contact_no: ["contact_no", "mobile"],
-  apartment_name: ["apartment_name"],
-  unit: ["block_no", "flat_no"],
   ward_name: ["ward_id", "ward_name"],
   zone_name: ["zone_id", "zone_name"],
   city_name: ["city_id", "city_name"],
@@ -194,9 +192,6 @@ const CUSTOMER_BULK_TEMPLATE_COLUMNS: ExcelTemplateColumn[] = [
     notes: "Comma-separated waste type names as shown in Waste Type master.",
   },
   { field: "member_count", header: "member_count", sample: "4" },
-  { field: "apartment_name", header: "apartment_name", sample: "Sunrise Apt" },
-  { field: "block_no", header: "block_no", sample: "A" },
-  { field: "flat_no", header: "flat_no", sample: "101" },
   {
     field: "panchayat_name",
     header: "panchayat_name",
@@ -382,9 +377,6 @@ export default function CustomerCreationListPage() {
     }, 400);
     return () => clearTimeout(timeout);
   }, [globalFilterValue]);
-
-  const cap = (str?: string) =>
-    str ? str.charAt(0).toUpperCase() + str.slice(1).toLowerCase() : "";
 
   const onSearchValueChange = (value: string) => setGlobalFilterValue(value);
 
@@ -826,9 +818,6 @@ export default function CustomerCreationListPage() {
             "customer_id",
             "customer_name",
             "contact_no",
-            "apartment_name",
-            "block_no",
-            "flat_no",
             "ward_name",
             "zone_name",
             "city_name",
@@ -884,31 +873,6 @@ export default function CustomerCreationListPage() {
               />
             )}
           />
-          {(showCol("apartment_name") || showCol("unit")) && (
-            <Column
-              field="apartment_name"
-              header="Apartment"
-              style={{ width: "16%" }}
-              body={(row: Customer) => (
-                <StackCell
-                  primary={
-                    showCol("apartment_name") &&
-                    row.apartment_name &&
-                    row.apartment_name.trim() !== "" &&
-                    cap(row.apartment_name)
-                  }
-                  lines={[
-                    showCol("unit") &&
-                      row.block_no &&
-                      row.flat_no && {
-                        label: "Unit",
-                        value: `${row.block_no}-${row.flat_no}`,
-                      },
-                  ]}
-                />
-              )}
-            />
-          )}
           {locationColumn<Customer>({
             header: t("common.location"),
             style: { width: "16%" },

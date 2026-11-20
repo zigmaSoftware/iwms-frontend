@@ -38,6 +38,7 @@ export type StaffTemplateInfo = {
 
 export type DailyTripLogRecord = {
   unique_id: string;
+  collection_type?: "bin_collection" | "household_collection" | "bulk_waste_collection" | null;
   location?: {
     district?: string | null;
     city?: string | null;
@@ -98,6 +99,7 @@ export type DailyTripLogRecord = {
     waste_type_breakdown?: WasteTypeBreakdownItem[];
     collected_at?: string | null;
     status?: string;
+    collection_type?: "household_collection" | "bulk_waste_collection";
     status_evidence_image_url?: string | null;
     capture_images?: TripLogCaptureImage[];
   }[];

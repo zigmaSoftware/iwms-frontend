@@ -110,12 +110,6 @@ const CUSTOMER_CREATION_FIELDS: Record<string, string[]> = {
   panchayat_id: ["panchayat_id", "panchayat"],
   is_active: ["is_active"],
   is_bulkwaste_generator: ["is_bulkwaste_generator"],
-  apartment_name: ["apartment_name"],
-  block_no: ["block_no"],
-  flat_no: ["flat_no"],
-  villa_no: ["villa_no"],
-  industry_name: ["industry_name"],
-  industry_type: ["industry_type"],
 };
 
 /* ===============================
@@ -689,13 +683,6 @@ export default function CustomerCreationForm() {
     project_id: "",
     is_active: true,
     is_bulkwaste_generator: false,
-    // Property type specific fields
-    apartment_name: "",
-    block_no: "",
-    flat_no: "",
-    villa_no: "",
-    industry_name: "",
-    industry_type: "",
   });
 
   const { showZone, showPanchayat } = useZonePanchayatVisibility({
@@ -1155,12 +1142,6 @@ export default function CustomerCreationForm() {
       project_id: String(data.project_id ?? ""),
       is_active: Boolean(data.is_active),
       is_bulkwaste_generator: Boolean(data.is_bulkwaste_generator),
-      apartment_name: String(data.apartment_name ?? ""),
-      block_no: String(data.block_no ?? ""),
-      flat_no: String(data.flat_no ?? ""),
-      villa_no: String(data.villa_no ?? ""),
-      industry_name: String(data.industry_name ?? ""),
-      industry_type: String(data.industry_type ?? ""),
     }));
     setPendingEditData(null);
   }, [
@@ -1300,10 +1281,6 @@ export default function CustomerCreationForm() {
   );
 
   const subName = selectedSubProperty?.sub_property_name?.toLowerCase() || "";
-  const isIndividual =
-    subName.includes("individual") || subName.includes("house");
-  const isApartment = subName.includes("apartment");
-  const isVilla = subName.includes("villa");
   const isIndustry = subName.includes("industry");
   const propertyName = [
     selectedPropertyRecord?.property_name,
@@ -1317,6 +1294,9 @@ export default function CustomerCreationForm() {
     .toLowerCase();
   const isResidentialProperty =
     !isIndustry && isResidentialName(`${propertyName} ${subName}`);
+  const isResidentialIndividualHouse =
+    isResidentialProperty &&
+    (subName.includes("individual") || subName.includes("house"));
   const visibleWasteTypes = useMemo(
     () =>
       dropdowns.wasteTypes.filter((wasteType: any) => {
@@ -1345,7 +1325,6 @@ export default function CustomerCreationForm() {
     formData.water_consumption_lpd,
     formData.waste_collection_kg_per_day,
   ]);
-
   // const zoneOrWardSelected  = Boolean(formData.zone_id || formData.ward_id);
   // const panchayatSelected   = Boolean(formData.panchayat_id);
   const isPanchayatSelected = Boolean(formData.panchayat_id);
@@ -1366,12 +1345,15 @@ export default function CustomerCreationForm() {
     });
   }, [isResidentialProperty, visibleWasteTypes]);
 
+  // A threshold match always identifies the customer as a bulk waste
+  // generator. Below the threshold, staff can still set the flag manually.
   useEffect(() => {
-    setFormData((prev) => {
-      if (prev.is_bulkwaste_generator === isBulkWasteThresholdMatched)
-        return prev;
-      return { ...prev, is_bulkwaste_generator: isBulkWasteThresholdMatched };
-    });
+    if (!isBulkWasteThresholdMatched) return;
+    setFormData((previous) =>
+      previous.is_bulkwaste_generator
+        ? previous
+        : { ...previous, is_bulkwaste_generator: true },
+    );
   }, [isBulkWasteThresholdMatched]);
 
   /* ===============================
@@ -1450,10 +1432,10 @@ export default function CustomerCreationForm() {
       waste_collection_kg_per_day: formData.waste_collection_kg_per_day
         ? String(parseFloat(formData.waste_collection_kg_per_day))
         : null,
-      member_count: formData.member_count
+      member_count: isResidentialIndividualHouse && formData.member_count
         ? Number.parseInt(formData.member_count, 10)
         : null,
-      family_members: formData.family_members,
+      family_members: isResidentialIndividualHouse ? formData.family_members : [],
       waste_type_ids: formData.waste_type_ids,
       ...(isEdit && !formData.password ? { password: undefined } : {}), // Only include password for new records
     };
@@ -1771,135 +1753,31 @@ export default function CustomerCreationForm() {
               "Address & Location Information"
             }
           >
-            {/* INDIVIDUAL HOUSE */}
-            {isIndividual && (
-              <>
-                {showField("building_no") && (
-                  <FormInput
-                    label={t("common.building_no") || "Building No"}
-                    value={formData.building_no}
-                    onChange={(e) => update("building_no", e.target.value)}
-                    placeholder="e.g., 13A"
-                  />
-                )}
-                {showField("street") && (
-                  <FormInput
-                    label={t("common.street") || "Street"}
-                    value={formData.street}
-                    onChange={(e) => update("street", e.target.value)}
-                    placeholder="e.g., Main Street"
-                    isRequired={false}
-                  />
-                )}
-                {showField("area") && (
-                  <FormInput
-                    label={t("common.area") || "Area"}
-                    value={formData.area}
-                    onChange={(e) => update("area", e.target.value)}
-                    placeholder="e.g., Village Center"
-                    isRequired={false}
-                  />
-                )}
-              </>
+            {showField("building_no") && (
+              <FormInput
+                label={t("common.building_no") || "Building / Shop No"}
+                value={formData.building_no}
+                onChange={(e) => update("building_no", e.target.value)}
+                placeholder="e.g., 13A or Shop 12"
+              />
             )}
-
-            {/* APARTMENT */}
-            {isApartment && (
-              <>
-                {showField("apartment_name") && (
-                  <FormInput
-                    label="Apartment Name"
-                    value={formData.apartment_name}
-                    onChange={(e) => update("apartment_name", e.target.value)}
-                    placeholder="Enter apartment name"
-                    isRequired={false}
-                  />
-                )}
-                {showField("block_no") && (
-                  <FormInput
-                    label="Block No"
-                    value={formData.block_no}
-                    onChange={(e) => update("block_no", e.target.value)}
-                    placeholder="Enter block number"
-                    isRequired={false}
-                  />
-                )}
-                {showField("flat_no") && (
-                  <FormInput
-                    label="Flat No"
-                    value={formData.flat_no}
-                    onChange={(e) => update("flat_no", e.target.value)}
-                    placeholder="Enter flat number"
-                    isRequired={false}
-                  />
-                )}
-              </>
+            {showField("street") && (
+              <FormInput
+                label={t("common.street") || "Street"}
+                value={formData.street}
+                onChange={(e) => update("street", e.target.value)}
+                placeholder="e.g., Main Street"
+                isRequired={false}
+              />
             )}
-
-            {/* VILLA */}
-            {isVilla && (
-              <>
-                {showField("street") && (
-                  <FormInput
-                    label={t("common.street") || "Street"}
-                    value={formData.street}
-                    onChange={(e) => update("street", e.target.value)}
-                    placeholder="e.g., Main Street"
-                    isRequired={false}
-                  />
-                )}
-                {showField("area") && (
-                  <FormInput
-                    label={t("common.area") || "Area"}
-                    value={formData.area}
-                    onChange={(e) => update("area", e.target.value)}
-                    placeholder="e.g., Village Center"
-                    isRequired={false}
-                  />
-                )}
-                {showField("villa_no") && (
-                  <FormInput
-                    label="Villa No"
-                    value={formData.villa_no}
-                    onChange={(e) => update("villa_no", e.target.value)}
-                    placeholder="Enter villa number"
-                    isRequired={false}
-                  />
-                )}
-              </>
-            )}
-
-            {/* INDUSTRY */}
-            {isIndustry && (
-              <>
-                {showField("industry_name") && (
-                  <FormInput
-                    label="Industry Name"
-                    value={formData.industry_name}
-                    onChange={(e) => update("industry_name", e.target.value)}
-                    placeholder="Enter industry name"
-                    isRequired={false}
-                  />
-                )}
-                {showField("industry_type") && (
-                  <FormInput
-                    label="Industry Type"
-                    value={formData.industry_type}
-                    onChange={(e) => update("industry_type", e.target.value)}
-                    placeholder="Enter industry type"
-                    isRequired={false}
-                  />
-                )}
-                {showField("area") && (
-                  <FormInput
-                    label={t("common.area") || "Area"}
-                    value={formData.area}
-                    onChange={(e) => update("area", e.target.value)}
-                    placeholder="e.g., Industrial Zone"
-                    isRequired={false}
-                  />
-                )}
-              </>
+            {showField("area") && (
+              <FormInput
+                label={t("common.area") || "Area"}
+                value={formData.area}
+                onChange={(e) => update("area", e.target.value)}
+                placeholder="e.g., Market or Village Center"
+                isRequired={false}
+              />
             )}
 
             {showField("pincode") && (
@@ -2352,7 +2230,6 @@ export default function CustomerCreationForm() {
                   "Select option",
                 )}
                 isRequired={false}
-                disabled={true}
               />
             )}
             <div className="md:col-span-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
@@ -2423,7 +2300,7 @@ export default function CustomerCreationForm() {
                 />
               </div>
             )}
-            {showField("member_count") && (
+            {isResidentialIndividualHouse && showField("member_count") && (
               <FormInput
                 label="Family Member Count"
                 value={formData.member_count}
@@ -2435,7 +2312,7 @@ export default function CustomerCreationForm() {
                 isRequired={false}
               />
             )}
-            {showField("family_members") &&
+            {isResidentialIndividualHouse && showField("family_members") &&
               (() => {
                 const maxCount = Number.parseInt(
                   formData.member_count || "",

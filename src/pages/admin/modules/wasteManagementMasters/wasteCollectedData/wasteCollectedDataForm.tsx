@@ -20,6 +20,8 @@ import { wasteCollectedDataSchema } from "@/schemas/wasteManagementMasters/waste
 import { parseWithSchema, type FieldErrors } from "@/schemas/shared/parseFormErrors";
 import { FieldError } from "@/components/form/FieldError";
 import { FormSelect } from "@/components/common/FormSelect";
+import { AutoDetectLocationButton } from "@/components/common/AutoDetectLocationButton";
+import type { DetectedCoordinates } from "@/utils/geolocation";
 
 
 type WasteTypeOption = { unique_id: string; waste_type_name: string };
@@ -121,6 +123,8 @@ export default function WasteCollectedForm() {
   const [status, setStatus] = useState<WasteCollectionStatus>("Pending");
   const [collectionDate, setCollectionDate] = useState("");
   const [wardId, setWardId] = useState("");
+  const [latitude, setLatitude] = useState("");
+  const [longitude, setLongitude] = useState("");
 
   /* ── dropdown / derived data ── */
   const [allCustomers, setAllCustomers] = useState<Customer[]>([]);
@@ -277,6 +281,8 @@ export default function WasteCollectedForm() {
         });
         setStatus((res.status as WasteCollectionStatus) ?? "Pending");
         setCollectionDate(res.collection_date ? String(res.collection_date) : "");
+        setLatitude(res.latitude != null ? String(res.latitude) : "");
+        setLongitude(res.longitude != null ? String(res.longitude) : "");
         const recWardId = String(res.ward_id ?? res.ward?.unique_id ?? "");
         if (recWardId) setWardId(recWardId);
         applyCompanyProjectFromRecord(res as unknown as Record<string, unknown>);
@@ -452,6 +458,16 @@ export default function WasteCollectedForm() {
 
   const customerWardName = selectedCustomer?.ward_name || "";
 
+  const handleLocationDetected = (coordinates: DetectedCoordinates) => {
+    setLatitude(String(coordinates.latitude));
+    setLongitude(String(coordinates.longitude));
+    setFieldErrors((previous) => ({
+      ...previous,
+      latitude: "",
+      longitude: "",
+    }));
+  };
+
   /* ── submit ── */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -480,6 +496,15 @@ export default function WasteCollectedForm() {
       return;
     }
 
+    if (status === "Collected" && (!latitude || !longitude)) {
+      Swal.fire(
+        t("common.warning"),
+        "Capture the collection latitude and longitude before marking this collection as Collected.",
+        "warning",
+      );
+      return;
+    }
+
     const payload: Record<string, unknown> = {
       company_id_input: companyUniqueId,
       project_id_input: projectId,
@@ -493,6 +518,8 @@ export default function WasteCollectedForm() {
       status,
       collection_date: collectionDate || undefined,
       ward_id: wardId || undefined,
+      latitude: latitude || undefined,
+      longitude: longitude || undefined,
     };
 
     setIsSubmitting(true);
@@ -592,6 +619,8 @@ export default function WasteCollectedForm() {
                 value={customerId}
                 onChange={(value) => {
                   setCustomerId(value);
+                  setLatitude("");
+                  setLongitude("");
                   setFieldErrors((prev) => ({ ...prev, customer_id: "" }));
                 }}
                 options={customerOptionsWithCurrent}
@@ -667,6 +696,37 @@ export default function WasteCollectedForm() {
             <div>
               <Label>{t("admin.waste_collected_data.customer_ward")}</Label>
               <Input disabled className="bg-gray-100" value={customerWardName} />
+            </div>
+
+            <div>
+              <Label>Collection Latitude</Label>
+              <Input
+                type="number"
+                step="0.000001"
+                value={latitude}
+                onChange={(event) => setLatitude(event.target.value)}
+                placeholder="e.g., 13.082700"
+              />
+              <FieldError message={fieldErrors.latitude} />
+            </div>
+
+            <div>
+              <Label>Collection Longitude</Label>
+              <Input
+                type="number"
+                step="0.000001"
+                value={longitude}
+                onChange={(event) => setLongitude(event.target.value)}
+                placeholder="e.g., 80.270700"
+              />
+              <FieldError message={fieldErrors.longitude} />
+            </div>
+
+            <div className="flex items-end">
+              <AutoDetectLocationButton
+                onDetected={handleLocationDetected}
+                label="Capture collection location"
+              />
             </div>
 
           </div>

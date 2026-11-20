@@ -226,6 +226,7 @@ export default function TripPlanList() {
     options: [
       { value: "bin_collection", label: "Bin Collection" },
       { value: "household_collection", label: "Household Collection" },
+      { value: "bulk_waste_collection", label: "Bulk Waste Collection" },
     ],
     allLabel: "All Types",
     onAppliedChange: resetPage,

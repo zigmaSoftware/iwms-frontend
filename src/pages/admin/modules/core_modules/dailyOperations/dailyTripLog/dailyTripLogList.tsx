@@ -286,7 +286,7 @@ const computeTotalWeight = (row: DailyTripLogRecord): number => {
   );
 };
 
-type CollectionType = "all" | "bin" | "household";
+type CollectionType = "all" | "bin" | "household" | "bulk";
 
 /* ── client-side "bin vs household" post-filter ── */
 const matchesCollectionType = (row: DailyTripLogRecord, collectionType: CollectionType): boolean => {
@@ -301,7 +301,10 @@ const matchesCollectionType = (row: DailyTripLogRecord, collectionType: Collecti
     );
   }
   if (collectionType === "household") {
-    return row.household_collected_weight_kg != null && Number(row.household_collected_weight_kg) > 0;
+    return row.collection_type === "household_collection";
+  }
+  if (collectionType === "bulk") {
+    return row.collection_type === "bulk_waste_collection";
   }
   return true;
 };
@@ -834,6 +837,7 @@ export default function DailyTripLogList() {
     options: [
       { value: "bin", label: "Bin Collection" },
       { value: "household", label: "Household Collection" },
+      { value: "bulk", label: "Bulk Waste Collection" },
     ],
     onAppliedChange: () => setFirst(0),
   });

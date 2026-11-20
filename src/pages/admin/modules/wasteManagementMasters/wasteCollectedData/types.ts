@@ -46,6 +46,8 @@ export type WasteCollection = {
   status?: WasteCollectionStatus;
   collection_date?: string;
   collection_time?: string;
+  latitude?: string | number | null;
+  longitude?: string | number | null;
   is_active: boolean;
   company_id?: string | null;
   company_unique_id?: string | null;

@@ -20,6 +20,7 @@ import { useTranslation } from "react-i18next";
 
 
 import { companyApi } from "@/helpers/admin";
+import { API_ROOT } from "@/api";
 import { companySchema } from "@/schemas/superadminMasters/company.schema";
 import { parseWithSchema, type FieldErrors } from "@/schemas/shared/parseFormErrors";
 import { FieldError } from "@/components/form/FieldError";
@@ -33,11 +34,9 @@ const MAX_LOGO_SIZE = 2 * 1024 * 1024;
 const resolveMediaUrl = (value?: string | null) => {
   if (!value) return "";
   if (/^https?:\/\//i.test(value)) return value;
-  const apiRoot = import.meta.env.VITE_PROD === "true"
-    ? import.meta.env.VITE_API_PROD
-    : import.meta.env.VITE_API_LOCAL;
+  
   try {
-    const origin = new URL(apiRoot).origin;
+    const origin = new URL(API_ROOT).origin;
     return `${origin}${value.startsWith("/") ? value : `/${value}`}`;
   } catch {
     return value;

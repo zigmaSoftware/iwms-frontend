@@ -228,6 +228,7 @@ const DelayCell = ({ row }: { row: DailyTripAssignmentRecord }) => {
 const COLLECTION_TYPE_STYLES: Record<CollectionTypeKey, string> = {
   bin: "bg-blue-100 text-blue-800",
   household: "bg-green-100 text-green-800",
+  bulk: "bg-amber-100 text-amber-800",
   both: "bg-purple-100 text-purple-800",
   unknown: "bg-gray-100 text-gray-500",
 };
@@ -235,7 +236,8 @@ const COLLECTION_TYPE_STYLES: Record<CollectionTypeKey, string> = {
 const COLLECTION_TYPE_LABELS: Record<CollectionTypeKey, string> = {
   bin: "Bin Collection",
   household: "Household",
-  both: "Bin + Household",
+  bulk: "Bulk Waste",
+  both: "Combined Collection",
   unknown: "Unknown",
 };
 
@@ -245,10 +247,12 @@ const getCollectionTypeKey = (
   const ct = rec.collection_types ?? {
     has_bin: rec.trip_plan?.has_bin ?? false,
     has_household: rec.trip_plan?.has_household ?? false,
+    has_bulk: rec.trip_plan?.has_bulk ?? false,
   };
-  if (ct.has_bin && ct.has_household) return "both";
+  if ([ct.has_bin, ct.has_household, ct.has_bulk].filter(Boolean).length > 1) return "both";
   if (ct.has_bin) return "bin";
   if (ct.has_household) return "household";
+  if (ct.has_bulk) return "bulk";
   return "unknown";
 };
 
@@ -429,7 +433,8 @@ export default function DailyTripAssignmentList() {
     options: [
       { value: "bin", label: "Bin Collection" },
       { value: "household", label: "Household" },
-      { value: "both", label: "Bin + Household" },
+      { value: "bulk", label: "Bulk Waste" },
+      { value: "both", label: "Combined Collection" },
     ],
     onAppliedChange: () => setFirst(0),
   });

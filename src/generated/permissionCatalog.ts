@@ -138,7 +138,6 @@ export const PERMISSION_CATALOG = {
     screens: {
       "customercreations": { label: "Customer Creation", group: null },
       "customer-access-configuration": { label: "Customer App Access", group: null },
-      "apartment-list": { label: "Apartment List", group: null },
     },
   },
   "schedule-setup": {

@@ -20,9 +20,24 @@ declare module "axios" {
    ENV
 -------------------------------------------------------- */
 const IS_PROD = import.meta.env.VITE_PROD === "true";
-const API_ROOT = IS_PROD
-  ? import.meta.env.VITE_API_PROD
-  : import.meta.env.VITE_API_LOCAL;
+
+/** In prod, call the API on the same host the page was opened from (LAN IP
+ *  or public IP), keeping the port/path from VITE_API_PROD. A different host
+ *  is cross-site, and the browser would then drop the SameSite=Lax auth
+ *  cookie, giving 401s. */
+const resolveApiRoot = (): string => {
+  if (!IS_PROD) return import.meta.env.VITE_API_LOCAL;
+  const configured = import.meta.env.VITE_API_PROD;
+  try {
+    const url = new URL(configured);
+    url.hostname = window.location.hostname;
+    return url.toString().replace(/\/+$/, "");
+  } catch {
+    return configured;
+  }
+};
+
+export const API_ROOT = resolveApiRoot();
 
 /* --------------------------------------------------------
    DUPLICATE-SUBMIT GUARD

@@ -408,7 +408,12 @@ export default function DailyTripAssignmentForm() {
       return;
     }
     const sourceStops: any[] = Array.isArray(plan.plan_collection_points) ? plan.plan_collection_points : [];
-    const needsExpansion = sourceStops.some(
+    const effectiveSourceStops = sourceStops.length > 0
+      ? sourceStops
+      : ["household_collection", "bulk_waste_collection"].includes(String(plan?.collection_type))
+        ? [{ collection_type: plan.collection_type }]
+        : [];
+    const needsExpansion = effectiveSourceStops.some(
       (stop) => ["household_collection", "bulk_waste_collection"].includes(String(stop.collection_type)) && !stop.customer_id,
     );
     if (!needsExpansion) {
@@ -478,7 +483,9 @@ export default function DailyTripAssignmentForm() {
     // Restore collection type flags from the saved record
     const ct = rec.collection_types;
     const recHasBin = ct ? ct.has_bin : (rec.trip_plan?.has_bin ?? true);
-    const recHasHousehold = ct ? ct.has_household : (rec.trip_plan?.has_household ?? false);
+    const recHasHousehold = ct
+      ? (ct.has_household || Boolean(ct.has_bulk))
+      : (rec.trip_plan?.has_household || Boolean(rec.trip_plan?.has_bulk) || false);
     setHasBinStops(recHasBin || (!recHasBin && !recHasHousehold));
     setHasHouseholdStops(recHasHousehold);
 
@@ -544,8 +551,11 @@ export default function DailyTripAssignmentForm() {
 
     // Derive collection types from the plan's collection points
     const stops: any[] = plan?.plan_collection_points ?? [];
-    const hasBin = stops.some((s: any) => s?.collection_type === "bin_collection");
-    const hasHousehold = stops.some((s: any) => s?.collection_type === "household_collection");
+    const hasBin = stops.some((s: any) => s?.collection_type === "bin_collection") ||
+      (!stops.length && plan?.collection_type === "bin_collection");
+    const hasHousehold = stops.some((s: any) =>
+      ["household_collection", "bulk_waste_collection"].includes(String(s?.collection_type))
+    ) || ["household_collection", "bulk_waste_collection"].includes(String(plan?.collection_type));
     setHasBinStops(hasBin || (!hasBin && !hasHousehold)); // default to bin if unknown
     setHasHouseholdStops(hasHousehold);
 
@@ -1284,11 +1294,11 @@ export default function DailyTripAssignmentForm() {
             <div className="rounded-lg border border-purple-200">
               <div className="flex items-center justify-between border-b border-purple-200 bg-purple-50 px-4 py-3">
                 <div>
-                  <h2 className="text-base font-semibold text-purple-800">Daily Trip Household Collection Points</h2>
+                  <h2 className="text-base font-semibold text-purple-800">Daily Trip Customer Collection Points</h2>
                   <p className="text-xs text-purple-600">
                     {isEdit
-                      ? "Per-customer household stops generated from the selected Trip Plan."
-                      : "Household stops will be generated from the selected Trip Plan after saving."}
+                      ? "Per-customer household or bulk-waste stops generated from the selected Trip Plan."
+                      : "Customer stops will be generated from the selected Trip Plan after saving."}
                   </p>
                 </div>
                 {isEdit ? (
@@ -1299,7 +1309,9 @@ export default function DailyTripAssignmentForm() {
                   )
                 ) : (() => {
                   const plan = tripPlanRecords.find(p => (p.unique_id ?? p.id) === formData.trip_plan_id);
-                  const count = (plan?.plan_collection_points ?? []).filter((s: any) => s.collection_type === "household_collection" && s.customer_id).length;
+                  const count = (plan?.plan_collection_points ?? []).filter((s: any) =>
+                    ["household_collection", "bulk_waste_collection"].includes(String(s.collection_type)) && s.customer_id
+                  ).length;
                   return count > 0 ? (
                     <span className="rounded-full bg-purple-100 px-3 py-1 text-xs font-semibold text-purple-700">
                       {count} stops (preview)
@@ -1347,7 +1359,7 @@ export default function DailyTripAssignmentForm() {
                 if (allPreviewStops.length === 0) {
                   return (
                     <div className="px-4 py-6 text-sm text-gray-500">
-                      {formData.trip_plan_id ? "No household stops found in the selected trip plan." : "Select a trip plan to preview household stops."}
+                      {formData.trip_plan_id ? "No customer stops found in the selected trip plan." : "Select a trip plan to preview customer stops."}
                     </div>
                   );
                 }
@@ -1375,14 +1387,14 @@ export default function DailyTripAssignmentForm() {
                         ))}
                       </tbody>
                     </table>
-                    <p className="px-4 py-2 text-xs italic text-gray-400">These household stops will be created when you save.</p>
+                    <p className="px-4 py-2 text-xs italic text-gray-400">These customer stops will be created when you save.</p>
                   </div>
                 );
               })()}
 
               {isEdit && (
                 householdCollectionPoints.length === 0 ? (
-                  <div className="px-4 py-6 text-sm text-gray-500">No household collection stops are attached to this daily trip plan.</div>
+                  <div className="px-4 py-6 text-sm text-gray-500">No customer collection stops are attached to this daily trip plan.</div>
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-200 text-sm">

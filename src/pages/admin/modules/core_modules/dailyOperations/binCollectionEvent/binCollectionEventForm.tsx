@@ -46,6 +46,21 @@ const extractError = (error: any): string | null => {
   return null;
 };
 
+const extractFieldErrors = (error: unknown): FieldErrors => {
+  const data = (error as { response?: { data?: unknown } })?.response?.data;
+  if (!data || typeof data !== "object" || Array.isArray(data)) return {};
+
+  return Object.fromEntries(
+    Object.entries(data)
+      .filter(([, value]) => Array.isArray(value) || typeof value === "string")
+      .map(([field, value]) => [
+        field,
+        Array.isArray(value) ? String(value[0] ?? "") : value,
+      ])
+      .filter(([, message]) => message),
+  );
+};
+
 const stopIdOf = (stop: any): string =>
   String(stop?.unique_id ?? stop?.id ?? "");
 
@@ -103,6 +118,26 @@ const binTypeLabelOf = (source: any, fallback = ""): string =>
     source?.bin_type ??
     fallback,
   );
+
+const MAX_COLLECTION_DISTANCE_METERS = 10;
+
+const distanceInMeters = (
+  fromLatitude: number,
+  fromLongitude: number,
+  toLatitude: number,
+  toLongitude: number,
+): number => {
+  const earthRadiusMeters = 6_371_000;
+  const toRadians = (degrees: number) => (degrees * Math.PI) / 180;
+  const latitudeDelta = toRadians(toLatitude - fromLatitude);
+  const longitudeDelta = toRadians(toLongitude - fromLongitude);
+  const haversine =
+    Math.sin(latitudeDelta / 2) ** 2 +
+    Math.cos(toRadians(fromLatitude)) *
+      Math.cos(toRadians(toLatitude)) *
+      Math.sin(longitudeDelta / 2) ** 2;
+  return 2 * earthRadiusMeters * Math.asin(Math.sqrt(haversine));
+};
 
 const isStopCollected = (stop: any): boolean =>
   Boolean(stop?.is_collected) ||
@@ -445,8 +480,12 @@ export default function BinCollectionEventForm() {
     setFieldErrors((prev) => ({ ...prev, bin_id: "" }));
   };
 
-  const set = (field: keyof FormState) => (value: string) =>
+  const set = (field: keyof FormState) => (value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
+    setFieldErrors((prev) =>
+      prev[field] ? { ...prev, [field]: "" } : prev,
+    );
+  };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -455,17 +494,42 @@ export default function BinCollectionEventForm() {
       bin_id: form.bin_id,
       status: form.status,
       collected_weight_kg: form.collected_weight_kg,
+      driver_latitude: form.driver_latitude,
+      driver_longitude: form.driver_longitude,
     });
     if (!validation.success) {
       setFieldErrors(validation.errors);
       Swal.fire(
         t("common.warning"),
-        validation.errors.trip_assignment_id ??
+          validation.errors.trip_assignment_id ??
           validation.errors.bin_id ??
           validation.errors.collected_weight_kg ??
-          "Trip Assignment and Bin are required.",
+          validation.errors.driver_latitude ??
+          validation.errors.driver_longitude ??
+          "Trip Assignment, Bin, and GPS coordinates are required.",
         "warning",
       );
+      return;
+    }
+
+    const collectionPoint = selectedStop?.collection_point;
+    const collectionPointLatitude = Number(collectionPoint?.latitude);
+    const collectionPointLongitude = Number(collectionPoint?.longitude);
+    const capturedLatitude = Number(form.driver_latitude);
+    const capturedLongitude = Number(form.driver_longitude);
+    if (
+      Number.isFinite(collectionPointLatitude) &&
+      Number.isFinite(collectionPointLongitude) &&
+      distanceInMeters(
+        collectionPointLatitude,
+        collectionPointLongitude,
+        capturedLatitude,
+        capturedLongitude,
+      ) > MAX_COLLECTION_DISTANCE_METERS
+    ) {
+      const message = `Captured location must be within ${MAX_COLLECTION_DISTANCE_METERS} m of the collection point.`;
+      setFieldErrors({ driver_latitude: message });
+      Swal.fire(t("common.warning"), message, "warning");
       return;
     }
     setFieldErrors({});
@@ -501,6 +565,8 @@ export default function BinCollectionEventForm() {
       }
       navigate(LIST_PATH, { state: { companyUniqueId, projectId } });
     } catch (err: any) {
+      const apiFieldErrors = extractFieldErrors(err);
+      if (Object.keys(apiFieldErrors).length) setFieldErrors(apiFieldErrors);
       Swal.fire(t("common.error"), extractError(err) ?? t("common.save_failed_desc"), "error");
     } finally {
       setSaving(false);
@@ -695,11 +761,13 @@ export default function BinCollectionEventForm() {
           {/* GPS */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label>GPS Latitude</Label>
+              <Label>GPS Latitude <span className="text-red-500">*</span></Label>
               <div className="flex items-center gap-2">
                 <Input
                   type="number"
                   step="any"
+                  min={-90}
+                  max={90}
                   value={form.driver_latitude}
                   onChange={(e) => set("driver_latitude")(e.target.value)}
                   placeholder="e.g. 11.1271"
@@ -714,16 +782,20 @@ export default function BinCollectionEventForm() {
                   title="Auto-detect current GPS coordinates"
                 />
               </div>
+              <FieldError message={fieldErrors.driver_latitude} />
             </div>
             <div>
-              <Label>GPS Longitude</Label>
+              <Label>GPS Longitude <span className="text-red-500">*</span></Label>
               <Input
                 type="number"
                 step="any"
+                min={-180}
+                max={180}
                 value={form.driver_longitude}
                 onChange={(e) => set("driver_longitude")(e.target.value)}
                 placeholder="e.g. 78.6569"
               />
+              <FieldError message={fieldErrors.driver_longitude} />
             </div>
           </div>
 

@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select";
 
 import { projectApi } from "@/helpers/admin";
+import { API_ROOT } from "@/api";
 import { useCompanyProjectSelection } from "@/hooks/useCompanyProjectSelection";
 import { projectSchema } from "@/schemas/superadminMasters/project.schema";
 import { parseWithSchema, type FieldErrors } from "@/schemas/shared/parseFormErrors";
@@ -43,11 +44,9 @@ const MAX_LOGO_SIZE = 2 * 1024 * 1024;
 const resolveMediaUrl = (value?: string | null) => {
   if (!value) return "";
   if (/^https?:\/\//i.test(value)) return value;
-  const apiRoot = import.meta.env.VITE_PROD === "true"
-    ? import.meta.env.VITE_API_PROD
-    : import.meta.env.VITE_API_LOCAL;
+  
   try {
-    const origin = new URL(apiRoot).origin;
+    const origin = new URL(API_ROOT).origin;
     return `${origin}${value.startsWith("/") ? value : `/${value}`}`;
   } catch {
     return value;

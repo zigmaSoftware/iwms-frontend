@@ -213,6 +213,7 @@ export function ReportFilterBar({
         <select value={filters.source} onChange={(e) => filters.setSource(e.target.value)} className={`${fieldCls} max-w-[170px]`} style={fieldStyle}>
           <option value="bin">Bin collection</option>
           <option value="household">Household collection</option>
+          <option value="bulk">Bulk waste collection</option>
           <option value="all">All sources</option>
         </select>
       </FilterField>

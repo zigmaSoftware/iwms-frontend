@@ -428,7 +428,6 @@ export default {
     customer_masters: "Customer Masters",
     customer_creation: "Customer Creation",
     customer_access_configuration: "Customer App Access",
-    apartment_list: "Apartment List",
     waste_collected_data: "Household Collections",
     feedback: "Feedback",
     customer_tag: "Customer Tag",

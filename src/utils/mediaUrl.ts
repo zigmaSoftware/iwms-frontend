@@ -1,11 +1,10 @@
+import { API_ROOT } from "@/api";
+
 /** Backend origin that serves uploaded files under /media/. */
 export const API_ORIGIN = (() => {
-  const apiRoot =
-    import.meta.env.VITE_PROD === "true"
-      ? import.meta.env.VITE_API_PROD
-      : import.meta.env.VITE_API_LOCAL;
+  
   try {
-    return new URL(apiRoot).origin;
+    return new URL(API_ROOT).origin;
   } catch {
     return "";
   }
