@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import Swal from "@/lib/notify";
 import { useTranslation } from "react-i18next";
+import i18n from "i18next";
 
 import { DataTable } from "@/components/common/SafeDataTable";
 import { Column } from "primereact/column";
@@ -43,12 +44,19 @@ const STATUS_STYLES: Record<string, string> = {
   Verified: "bg-green-100 text-green-800",
 };
 
-/* Status tabs above the table — "" = every status. */
+/* Status tabs above the table — "" = every status. `label` is an i18n key. */
 const STATUS_TABS: Array<{ key: string; label: string; dot: string }> = [
-  { key: "", label: "All", dot: "bg-slate-400" },
-  { key: "Unverified", label: "Unverified", dot: "bg-gray-400" },
-  { key: "Verified", label: "Verified", dot: "bg-green-500" },
+  { key: "", label: "common.all", dot: "bg-slate-400" },
+  { key: "Unverified", label: "admin.daily_trip_log.status.unverified", dot: "bg-gray-400" },
+  { key: "Verified", label: "admin.daily_trip_log.status.verified", dot: "bg-green-500" },
 ];
+
+/* Display label for a log/collection status value (the value itself is never changed). */
+const statusLabel = (value?: string | null): string => {
+  if (!value) return "-";
+  const slug = value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_");
+  return i18n.t(`admin.daily_trip_log.status.${slug}`, { defaultValue: value });
+};
 
 const COLLECTION_STATUS_STYLES: Record<string, string> = {
   "Not Started": "bg-red-50 text-red-600",
@@ -62,7 +70,7 @@ const Badge = ({ value }: { value?: string }) => (
       STATUS_STYLES[value ?? ""] ?? "bg-gray-100 text-gray-600"
     }`}
   >
-    {value ?? "-"}
+    {statusLabel(value)}
   </span>
 );
 
@@ -72,11 +80,12 @@ const CollectionStatusBadge = ({ value }: { value?: string }) => (
       COLLECTION_STATUS_STYLES[value ?? ""] ?? "bg-gray-100 text-gray-500"
     }`}
   >
-    {value ?? "-"}
+    {statusLabel(value)}
   </span>
 );
 
 const BreakdownCell = ({ row }: { row: DailyTripLogRecord }) => {
+  const { t } = useTranslation();
   const bd = row.breakdown_info;
   if (!bd) return <span className="text-xs text-gray-300">—</span>;
 
@@ -94,18 +103,18 @@ const BreakdownCell = ({ row }: { row: DailyTripLogRecord }) => {
               : "bg-red-100 text-red-700"
         }`}
       >
-        {isApproved ? "✓ Replaced" : isPending ? "⚠ Pending" : "✕ Rejected"}
+        {isApproved ? `✓ ${t("admin.daily_trip_log.replaced")}` : isPending ? `⚠ ${t("common.pending")}` : `✕ ${t("common.rejected")}`}
       </span>
       {isApproved && bd.replacement_vehicle_no && (
         <div className="text-[10px] text-gray-600 leading-tight">
-          <span className="font-medium">Veh:</span> {bd.replacement_vehicle_no}
+          <span className="font-medium">{t("admin.daily_trip_log.veh_short")}:</span> {bd.replacement_vehicle_no}
         </div>
       )}
       {isApproved && (bd.replacement_driver || bd.replacement_operator) && (
         <div className="text-[10px] text-gray-600 leading-tight">
           {bd.replacement_driver && (
             <span>
-              <span className="font-medium">Drv:</span> {bd.replacement_driver}
+              <span className="font-medium">{t("admin.daily_trip_log.drv_short")}:</span> {bd.replacement_driver}
             </span>
           )}
           {bd.replacement_driver && bd.replacement_operator && (
@@ -113,7 +122,7 @@ const BreakdownCell = ({ row }: { row: DailyTripLogRecord }) => {
           )}
           {bd.replacement_operator && (
             <span>
-              <span className="font-medium">Opr:</span>{" "}
+              <span className="font-medium">{t("admin.daily_trip_log.opr_short")}:</span>{" "}
               {bd.replacement_operator}
             </span>
           )}
@@ -231,9 +240,9 @@ const locationText = (row: DailyTripLogRecord): string => {
   const zone =
     row.zone?.zone_name ?? row.trip_assignment?.zone?.zone_name ?? null;
   const parent = panchayat
-    ? `Panchayat: ${panchayat}`
+    ? `${i18n.t("common.panchayat")}: ${panchayat}`
     : zone
-      ? `Zone: ${zone}`
+      ? `${i18n.t("common.zone")}: ${zone}`
       : null;
 
   if (ward && parent) return `${ward} (${parent})`;
@@ -325,6 +334,7 @@ function TripLogModal({
   onConfirm: (remarks: string) => void;
   isLoading: boolean;
 }) {
+  const { t } = useTranslation();
   const [remarks, setRemarks] = useState(row.remarks ?? "");
   const cps = row.collection_points ?? [];
   const collectedCount = cps.filter((cp) => cp.is_collected).length;
@@ -347,14 +357,14 @@ function TripLogModal({
   const footer = (
     <div className="flex justify-end gap-2 pt-2">
       <Button
-        label={mode === "view" ? "Close" : "Cancel"}
+        label={mode === "view" ? t("admin.daily_trip_log.close") : t("common.cancel")}
         className="p-button-text p-button-secondary"
         onClick={onClose}
         disabled={isLoading}
       />
       {mode === "verify" && (
         <Button
-          label="Verify"
+          label={t("admin.daily_trip_log.verify")}
           icon="pi pi-check"
           className="p-button-success"
           loading={isLoading}
@@ -365,7 +375,7 @@ function TripLogModal({
     </div>
   );
 
-  const title = mode === "verify" ? "Verify Trip Log" : "Trip Log Details";
+  const title = mode === "verify" ? t("admin.daily_trip_log.verify_title") : t("admin.daily_trip_log.details_title");
   const statusColor: Record<string, string> = {
     Unverified: "text-gray-600",
     Verified: "text-green-600",
@@ -388,7 +398,7 @@ function TripLogModal({
               statusColor[row.log_status ?? ""] ?? "text-gray-500"
             }`}
           >
-            {row.log_status}
+            {statusLabel(row.log_status)}
           </span>
         </div>
       }
@@ -401,57 +411,57 @@ function TripLogModal({
       <div className="flex flex-col gap-5 pt-1">
         {/* Trip details */}
         <div>
-          <SectionLabel>Trip Details</SectionLabel>
+          <SectionLabel>{t("admin.daily_trip_log.trip_details")}</SectionLabel>
           <div className="flex flex-col gap-1.5">
             <InfoRow
-              label="Trip Assignment"
+              label={t("admin.daily_trip_log.trip_assignment")}
               value={
                 row.trip_assignment?.display_code ?? row.trip_assignment_id
               }
             />
-            <InfoRow label="Date" value={row.trip_date} />
+            <InfoRow label={t("common.date")} value={row.trip_date} />
             <div className="flex gap-2 text-sm">
               <span className="text-gray-500 w-36 shrink-0">
-                Collection Status
+                {t("admin.daily_trip_log.collection_status")}
               </span>
               <CollectionStatusBadge value={row.collection_status} />
             </div>
-            <InfoRow label="Waste Type" value={wasteTypeName} />
-            <InfoRow label="Bin Weight" value={weight} />
+            <InfoRow label={t("common.waste_type")} value={wasteTypeName} />
+            <InfoRow label={t("admin.daily_trip_log.bin_weight")} value={weight} />
             {row.household_collected_weight_kg != null && (
               <InfoRow
-                label="Household Weight"
+                label={t("admin.daily_trip_log.household_weight")}
                 value={`${Number(row.household_collected_weight_kg).toFixed(2)} kg`}
               />
             )}
             <InfoRow
-              label="Total Weight"
+              label={t("admin.daily_trip_log.total_weight")}
               value={`${totalWeight.toFixed(2)} kg`}
             />
             {Array.isArray(row.waste_type_breakdown) &&
               row.waste_type_breakdown.length > 0 && (
                 <div className="flex gap-2 text-sm">
                   <span className="text-gray-500 w-36 shrink-0">
-                    Waste Breakdown
+                    {t("admin.daily_trip_log.waste_breakdown")}
                   </span>
                   <WasteChips items={row.waste_type_breakdown} />
                 </div>
               )}
             {row.actual_start_time && (
               <InfoRow
-                label="Start Time"
+                label={t("admin.daily_trip_log.start_time")}
                 value={formatTimeOnly(row.actual_start_time)}
               />
             )}
             {row.actual_end_time && (
               <InfoRow
-                label="End Time"
+                label={t("admin.daily_trip_log.end_time")}
                 value={formatTimeOnly(row.actual_end_time)}
               />
             )}
             {(row.vehicle as any)?.vehicle_no && (
               <InfoRow
-                label="Vehicle"
+                label={t("common.vehicle")}
                 value={(row.vehicle as any).vehicle_no}
               />
             )}
@@ -469,12 +479,18 @@ function TripLogModal({
                 : zone
                   ? "Zone"
                   : null;
+              const parentLabelText =
+                parentLabel === "Panchayat"
+                  ? t("common.panchayat")
+                  : parentLabel === "Zone"
+                    ? t("common.zone")
+                    : null;
               const parentName = panchayat ?? zone ?? null;
 
               if (!ward && !parentName) return null;
               return (
                 <div className="flex gap-2 text-sm">
-                  <span className="text-gray-500 w-36 shrink-0">Location</span>
+                  <span className="text-gray-500 w-36 shrink-0">{t("common.location")}</span>
                   <span className="font-medium text-gray-800">
                     {ward ?? parentName}
                     {ward && parentName && (
@@ -485,7 +501,7 @@ function TripLogModal({
                             : "text-teal-500"
                         }`}
                       >
-                        ({parentLabel}: {parentName})
+                        ({parentLabelText}: {parentName})
                       </span>
                     )}
                   </span>
@@ -499,42 +515,42 @@ function TripLogModal({
 
         {/* Staff */}
         <div>
-          <SectionLabel>Staff</SectionLabel>
+          <SectionLabel>{t("admin.daily_trip_log.staff")}</SectionLabel>
           {st?.base ? (
             <div className="mb-3">
               <p className="text-xs text-gray-500 mb-1.5">
-                Base Template:{" "}
+                {t("admin.daily_trip_log.base_template")}:{" "}
                 <span className="font-semibold text-gray-700">
                   {st.base.display_code}
                 </span>
               </p>
               <div className="flex flex-col gap-1 pl-3 border-l-2 border-gray-200">
-                <InfoRow label="Driver" value={st.base.driver?.employee_name} />
+                <InfoRow label={t("admin.daily_trip_log.driver")} value={st.base.driver?.employee_name} />
                 <InfoRow
-                  label="Operator"
+                  label={t("admin.daily_trip_log.operator")}
                   value={st.base.operator?.employee_name}
                 />
               </div>
             </div>
           ) : (
             <div className="mb-3 flex flex-col gap-1">
-              <InfoRow label="Driver" value={row.driver?.employee_name} />
-              <InfoRow label="Operator" value={row.operator?.employee_name} />
+              <InfoRow label={t("admin.daily_trip_log.driver")} value={row.driver?.employee_name} />
+              <InfoRow label={t("admin.daily_trip_log.operator")} value={row.operator?.employee_name} />
             </div>
           )}
           {st?.alt && (
             <div>
               <p className="text-xs text-orange-500 mb-1.5">
-                Alt Template{" "}
-                <span className="text-orange-400">(Substitute)</span>:{" "}
+                {t("admin.daily_trip_log.alt_template")}{" "}
+                <span className="text-orange-400">({t("admin.daily_trip_log.substitute")})</span>:{" "}
                 <span className="font-semibold text-orange-700">
                   {st.alt.display_code}
                 </span>
               </p>
               <div className="flex flex-col gap-1 pl-3 border-l-2 border-orange-200">
-                <InfoRow label="Driver" value={st.alt.driver?.employee_name} />
+                <InfoRow label={t("admin.daily_trip_log.driver")} value={st.alt.driver?.employee_name} />
                 <InfoRow
-                  label="Operator"
+                  label={t("admin.daily_trip_log.operator")}
                   value={st.alt.operator?.employee_name}
                 />
               </div>
@@ -546,35 +562,35 @@ function TripLogModal({
           <>
             <Divider className="!my-0" />
             <div>
-              <SectionLabel>Vehicle Breakdown</SectionLabel>
+              <SectionLabel>{t("admin.daily_trip_log.vehicle_breakdown")}</SectionLabel>
               <div className="mb-2">
                 <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700">
-                  ✓ Replacement Arranged
+                  ✓ {t("admin.daily_trip_log.replacement_arranged")}
                 </span>
               </div>
               <div className="flex flex-col gap-1.5">
                 <InfoRow
-                  label="Reason"
+                  label={t("admin.daily_trip_log.reason")}
                   value={row.breakdown_info.breakdown_reason}
                 />
                 <InfoRow
-                  label="Reported At"
+                  label={t("admin.daily_trip_log.reported_at")}
                   value={row.breakdown_info.breakdown_time}
                 />
                 <InfoRow
-                  label="Broken Vehicle"
+                  label={t("admin.daily_trip_log.broken_vehicle")}
                   value={row.breakdown_info.breakdown_vehicle_no}
                 />
                 <InfoRow
-                  label="Replacement Vehicle"
+                  label={t("admin.daily_trip_log.replacement_vehicle")}
                   value={row.breakdown_info.replacement_vehicle_no}
                 />
                 <InfoRow
-                  label="Replacement Driver"
+                  label={t("admin.daily_trip_log.replacement_driver")}
                   value={row.breakdown_info.replacement_driver}
                 />
                 <InfoRow
-                  label="Replacement Operator"
+                  label={t("admin.daily_trip_log.replacement_operator")}
                   value={row.breakdown_info.replacement_operator}
                 />
               </div>
@@ -587,16 +603,16 @@ function TripLogModal({
         {/* Collection Points */}
         <div>
           <SectionLabel>
-            Collection Points
+            {t("admin.daily_trip_log.collection_points")}
             {cps.length > 0 && (
               <span className="ml-1 normal-case font-normal text-gray-400">
-                — {collectedCount} / {cps.length} collected
+                — {t("admin.daily_trip_log.collected_of_total", { collected: collectedCount, total: cps.length })}
               </span>
             )}
           </SectionLabel>
           {cps.length === 0 ? (
             <p className="text-sm text-gray-400">
-              No collection points recorded.
+              {t("admin.daily_trip_log.no_collection_points")}
             </p>
           ) : (
             <ul className="flex flex-col gap-2">
@@ -621,7 +637,7 @@ function TripLogModal({
                     </span>
                     {!cp.is_collected && (
                       <span className="text-xs text-red-400">
-                        (Not collected)
+                        ({t("common.not_collected")})
                       </span>
                     )}
                     {Array.isArray(cp.waste_type_breakdown) &&
@@ -648,9 +664,9 @@ function TripLogModal({
             <Divider className="!my-0" />
             <div>
               <SectionLabel>
-                Household Collections
+                {t("admin.daily_trip_log.household_collections")}
                 <span className="ml-1 normal-case font-normal text-gray-400">
-                  — {hhCollectedCount} / {hhCollections.length} collected
+                  — {t("admin.daily_trip_log.collected_of_total", { collected: hhCollectedCount, total: hhCollections.length })}
                 </span>
               </SectionLabel>
               <ul className="flex flex-col gap-2">
@@ -677,7 +693,7 @@ function TripLogModal({
                       </span>
                       {!hh.is_collected && (
                         <span className="text-xs text-red-400">
-                          (Not collected)
+                          ({t("common.not_collected")})
                         </span>
                       )}
                       {Array.isArray(hh.waste_type_breakdown) &&
@@ -715,7 +731,7 @@ function TripLogModal({
             <Divider className="!my-0" />
             <div>
               <SectionLabel>
-                {mode === "verify" ? "Remarks (optional)" : "Remarks"}
+                {mode === "verify" ? t("admin.daily_trip_log.remarks_optional") : t("admin.daily_trip_log.remarks")}
               </SectionLabel>
               {mode === "verify" ? (
                 <InputTextarea
@@ -723,7 +739,7 @@ function TripLogModal({
                   onChange={(e) => setRemarks(e.target.value)}
                   rows={2}
                   className="w-full text-sm"
-                  placeholder="Add verification remarks..."
+                  placeholder={t("admin.daily_trip_log.remarks_placeholder")}
                   autoResize
                 />
               ) : (
@@ -740,11 +756,11 @@ function TripLogModal({
             <>
               <Divider className="!my-0" />
               <div>
-                <SectionLabel>Verification</SectionLabel>
+                <SectionLabel>{t("admin.daily_trip_log.verification")}</SectionLabel>
                 <div className="flex flex-col gap-1.5">
-                  <InfoRow label="Verified by" value={row.verified_by_name} />
+                  <InfoRow label={t("admin.daily_trip_log.verified_by")} value={row.verified_by_name} />
                   <InfoRow
-                    label="Verified at"
+                    label={t("admin.daily_trip_log.verified_at")}
                     value={row.verified_at ?? undefined}
                   />
                 </div>
@@ -832,12 +848,12 @@ export default function DailyTripLogList() {
   const [sortOrder, setSortOrder] = useState<SortOrder>(undefined);
   const collectionTypeFilter = useOptionFilter({
     param: "collection_type",
-    label: "Collection",
-    allLabel: "All Collections",
+    label: t("admin.daily_trip_log.collection"),
+    allLabel: t("admin.daily_trip_log.all_collections"),
     options: [
-      { value: "bin", label: "Bin Collection" },
-      { value: "household", label: "Household Collection" },
-      { value: "bulk", label: "Bulk Waste Collection" },
+      { value: "bin", label: t("admin.daily_trip_log.bin_collection") },
+      { value: "household", label: t("admin.daily_trip_log.household_collection") },
+      { value: "bulk", label: t("admin.daily_trip_log.bulk_waste_collection") },
     ],
     onAppliedChange: () => setFirst(0),
   });
@@ -850,9 +866,9 @@ export default function DailyTripLogList() {
   const tripFilters = useDraftFilter({
     empty: { date: "", wasteTypes: "" },
     chips: {
-      date: { label: "Trip date" },
+      date: { label: t("admin.daily_trip_log.trip_date") },
       wasteTypes: {
-        label: "Waste type",
+        label: t("common.waste_type"),
         format: (ids) =>
           ids
             .split(",")
@@ -1084,15 +1100,15 @@ export default function DailyTripLogList() {
       setSummaryVersion((v) => v + 1);
       Swal.fire({
         icon: "success",
-        title: "Verified",
-        text: "Trip log has been verified.",
+        title: t("admin.daily_trip_log.status.verified"),
+        text: t("admin.daily_trip_log.verify_success"),
         timer: 2000,
         showConfirmButton: false,
       });
     } catch (err: any) {
       Swal.fire(
         t("common.error"),
-        extractError(err) ?? "Failed to verify trip log",
+        extractError(err) ?? t("admin.daily_trip_log.verify_failed"),
         "error",
       );
     } finally {
@@ -1103,11 +1119,15 @@ export default function DailyTripLogList() {
   /* ── revert a verified log back to Unverified ── */
   const handleRevertToUnverified = async (row: DailyTripLogRecord) => {
     const result = await Swal.fire({
-      title: "Revert to Unverified?",
-      text: `This will move the log from "${row.log_status}" back to "Unverified".`,
+      title: t("admin.daily_trip_log.revert_title"),
+      text: t("admin.daily_trip_log.revert_text", {
+        from: statusLabel(row.log_status),
+        to: statusLabel("Unverified"),
+      }),
       icon: "warning",
       showCancelButton: true,
-      confirmButtonText: "Yes, revert",
+      confirmButtonText: t("admin.daily_trip_log.revert_confirm"),
+      cancelButtonText: t("common.cancel"),
     });
     if (!result.isConfirmed) return;
     try {
@@ -1131,15 +1151,15 @@ export default function DailyTripLogList() {
       setSummaryVersion((v) => v + 1);
       Swal.fire({
         icon: "success",
-        title: "Done",
-        text: "Status changed to Unverified.",
+        title: t("admin.daily_trip_log.done"),
+        text: t("admin.daily_trip_log.revert_success"),
         timer: 2000,
         showConfirmButton: false,
       });
     } catch (err: any) {
       Swal.fire(
         t("common.error"),
-        extractError(err) ?? "Failed to change status",
+        extractError(err) ?? t("admin.daily_trip_log.change_status_failed"),
         "error",
       );
     }
@@ -1157,7 +1177,7 @@ export default function DailyTripLogList() {
           actions={[
             {
               key: "view",
-              label: "View details",
+              label: t("admin.daily_trip_log.view_details"),
               icon: <i className="pi pi-eye" />,
               onClick: () =>
                 navigate(
@@ -1168,21 +1188,21 @@ export default function DailyTripLogList() {
               ? [
                   {
                     key: "verify",
-                    label: "Verify this log",
+                    label: t("admin.daily_trip_log.verify_this_log"),
                     icon: <i className="pi pi-check-circle" />,
                     onClick: () => setModalState({ row, mode: "verify" as const }),
                     disabled: !canVerify,
                     disabledReason: isVerified
-                      ? "Already verified"
-                      : "Trip must have an actual end time before it can be verified",
+                      ? t("admin.daily_trip_log.already_verified")
+                      : t("admin.daily_trip_log.verify_requires_end_time"),
                   },
                   {
                     key: "revert",
-                    label: "Revert to unverified",
+                    label: t("admin.daily_trip_log.revert_to_unverified"),
                     icon: <i className="pi pi-undo" />,
                     onClick: () => void handleRevertToUnverified(row),
                     disabled: !isVerified,
-                    disabledReason: "Not verified yet",
+                    disabledReason: t("admin.daily_trip_log.not_verified_yet"),
                   },
                 ]
               : []),
@@ -1199,39 +1219,62 @@ export default function DailyTripLogList() {
     source: DailyTripLogRecord[],
   ): Record<string, unknown>[] => {
     const out: Record<string, unknown>[] = [];
+    const H = {
+      tripId: t("admin.daily_trip_log.export.trip_id"),
+      tripAssignment: t("admin.daily_trip_log.trip_assignment"),
+      tripDate: t("admin.daily_trip_log.export.trip_date"),
+      location: t("common.location"),
+      zone: t("common.zone"),
+      driver: t("admin.daily_trip_log.driver"),
+      operator: t("admin.daily_trip_log.operator"),
+      vehicle: t("common.vehicle"),
+      logStatus: t("admin.daily_trip_log.export.log_status"),
+      collectionStatus: t("admin.daily_trip_log.collection_status"),
+      collectionTime: t("admin.daily_trip_log.export.collection_time"),
+      pointType: t("admin.daily_trip_log.export.point_type"),
+      pointOrCustomer: t("admin.daily_trip_log.export.point_or_customer"),
+      wasteType: t("common.waste_type"),
+      collectedWeight: t("admin.daily_trip_log.export.collected_weight_kg"),
+      isCollected: t("admin.daily_trip_log.export.is_collected"),
+    };
+    const yes = t("common.yes");
+    const no = t("common.no");
     source.forEach((row) => {
+      const collectionTime =
+        [
+          row.actual_start_time
+            ? formatTimeOnly(row.actual_start_time)
+            : null,
+          row.actual_end_time ? formatTimeOnly(row.actual_end_time) : null,
+        ]
+          .filter(Boolean)
+          .join(" - ") || "-";
       const base = {
-        "Trip ID": row.unique_id,
-        "Trip Assignment":
+        [H.tripId]: row.unique_id,
+        [H.tripAssignment]:
           row.trip_assignment?.display_code ?? row.trip_assignment_id ?? "-",
-        "Trip Date": row.trip_date ?? "-",
-        Location:
+        [H.tripDate]: row.trip_date ?? "-",
+        [H.location]:
           row.panchayat?.panchayat_name ??
           (Array.isArray(row.ward)
             ? row.ward[0]?.ward_name
             : row.ward?.ward_name) ??
           "-",
-        Zone: row.trip_assignment?.zone?.zone_name ?? "-",
-        Driver:
+        [H.zone]: row.trip_assignment?.zone?.zone_name ?? "-",
+        [H.driver]:
           row.staff_template?.base?.driver?.employee_name ??
           row.driver?.employee_name ??
           "-",
-        Operator:
+        [H.operator]:
           row.staff_template?.base?.operator?.employee_name ??
           row.operator?.employee_name ??
           "-",
-        Vehicle: row.vehicle?.vehicle_no ?? "-",
-        "Log Status": row.log_status ?? "-",
-        "Collection Status": row.collection_status ?? "-",
-        "Collection Time":
-          [
-            row.actual_start_time
-              ? formatTimeOnly(row.actual_start_time)
-              : null,
-            row.actual_end_time ? formatTimeOnly(row.actual_end_time) : null,
-          ]
-            .filter(Boolean)
-            .join(" - ") || "-",
+        [H.vehicle]: row.vehicle?.vehicle_no ?? "-",
+        [H.logStatus]: row.log_status ? statusLabel(row.log_status) : "-",
+        [H.collectionStatus]: row.collection_status
+          ? statusLabel(row.collection_status)
+          : "-",
+        [H.collectionTime]: collectionTime,
       };
 
       const cps = row.collection_points ?? [];
@@ -1240,37 +1283,37 @@ export default function DailyTripLogList() {
       cps.forEach((cp) => {
         out.push({
           ...base,
-          "Point Type": "Collection Point",
-          "Collection Point / Customer": cp.cp_name ?? cp.unique_id ?? "-",
-          "Waste Type": wasteTypesLabel(row),
-          "Collected Weight (kg)": cp.collected_weight_kg ?? "-",
-          "Is Collected": cp.is_collected ? "Yes" : "No",
+          [H.pointType]: t("admin.daily_trip_log.export.point_type_collection_point"),
+          [H.pointOrCustomer]: cp.cp_name ?? cp.unique_id ?? "-",
+          [H.wasteType]: wasteTypesLabel(row),
+          [H.collectedWeight]: cp.collected_weight_kg ?? "-",
+          [H.isCollected]: cp.is_collected ? yes : no,
         });
       });
 
       hhs.forEach((hh) => {
         out.push({
           ...base,
-          "Point Type": "Household",
-          "Collection Point / Customer":
+          [H.pointType]: t("admin.daily_trip_log.export.point_type_household"),
+          [H.pointOrCustomer]:
             hh.customer_name ?? hh.customer_unique_id ?? "-",
-          "Waste Type": wasteTypesLabel(row),
-          "Collected Weight (kg)": hh.collected_weight_kg ?? "-",
-          "Is Collected": hh.is_collected ? "Yes" : "No",
-          "Collection Time": hh.collected_at
+          [H.wasteType]: wasteTypesLabel(row),
+          [H.collectedWeight]: hh.collected_weight_kg ?? "-",
+          [H.isCollected]: hh.is_collected ? yes : no,
+          [H.collectionTime]: hh.collected_at
             ? formatCollectionTime(hh.collected_at)
-            : base["Collection Time"],
+            : collectionTime,
         });
       });
 
       if (cps.length === 0 && hhs.length === 0) {
         out.push({
           ...base,
-          "Point Type": "-",
-          "Collection Point / Customer": "-",
-          "Waste Type": wasteTypesLabel(row),
-          "Collected Weight (kg)": computeTotalWeight(row).toFixed(2),
-          "Is Collected": "-",
+          [H.pointType]: "-",
+          [H.pointOrCustomer]: "-",
+          [H.wasteType]: wasteTypesLabel(row),
+          [H.collectedWeight]: computeTotalWeight(row).toFixed(2),
+          [H.isCollected]: "-",
         });
       }
     });
@@ -1299,8 +1342,8 @@ export default function DailyTripLogList() {
       if (exportRows.length === 0) {
         Swal.fire({
           icon: "warning",
-          title: "No records",
-          text: "There are no trip logs to export.",
+          title: t("common.no_records"),
+          text: t("admin.daily_trip_log.no_export_records"),
         });
         return;
       }
@@ -1308,11 +1351,11 @@ export default function DailyTripLogList() {
         await exportRecordsToExcel(
           exportRows,
           getAdminScreenExcelFilename("all"),
-          "Daily Trip Logs",
+          t("admin.nav.daily_trip_log"),
         );
       } else {
         await downloadRecordsPdf({
-          title: "Daily Trip Logs",
+          title: t("admin.nav.daily_trip_log"),
           filename: "daily_trip_logs.pdf",
           rows: exportRows,
           columns: Object.keys(exportRows[0]).map((key) => ({
@@ -1334,17 +1377,17 @@ export default function DailyTripLogList() {
 
   const tripFiltersField = (
     <>
-      <FilterSection label="Trip date">
+      <FilterSection label={t("admin.daily_trip_log.trip_date")}>
         <input
           type="date"
           value={tripFilters.draft.date}
           onChange={(e) => tripFilters.setField("date", e.target.value)}
           className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-          aria-label="Trip date"
-          title="Filter by trip date"
+          aria-label={t("admin.daily_trip_log.trip_date")}
+          title={t("admin.daily_trip_log.filter_by_trip_date")}
         />
       </FilterSection>
-      <FilterSection label="Waste type">
+      <FilterSection label={t("common.waste_type")}>
         <MultiSelect
           value={
             tripFilters.draft.wasteTypes
@@ -1355,7 +1398,7 @@ export default function DailyTripLogList() {
             tripFilters.setField("wasteTypes", (e.value as string[]).join(","))
           }
           options={wasteTypeOptions}
-          placeholder="Waste Type"
+          placeholder={t("common.waste_type")}
           display="chip"
           className="w-full text-sm"
         />
@@ -1380,8 +1423,8 @@ export default function DailyTripLogList() {
   return (
     <div className="min-h-full bg-gray-50/60 p-3 sm:p-5">
       <ListPageHeader
-        title="Daily Trip Logs"
-        subtitle="Capture and verify actual collection trip results"
+        title={t("admin.nav.daily_trip_log")}
+        subtitle={t("admin.daily_trip_log.subtitle")}
         className="mb-3 shrink-0"
       />
 
@@ -1390,44 +1433,47 @@ export default function DailyTripLogList() {
         <KpiCard
           icon="pi pi-truck"
           tone="bg-slate-100 text-slate-600"
-          label="Trip logs"
+          label={t("admin.daily_trip_log.kpi.trip_logs")}
           value={kpiValue(summary.total_logs.toLocaleString())}
-          hint={`${summary.trips.toLocaleString()} trips`}
+          hint={t("admin.daily_trip_log.kpi.trips_count", { count: summary.trips, value: summary.trips.toLocaleString() })}
         />
         <KpiCard
           icon="pi pi-box"
           tone="bg-emerald-50 text-emerald-600"
-          label="Total weight"
+          label={t("admin.daily_trip_log.kpi.total_weight")}
           value={kpiValue(formatKg(summary.total_weight_kg))}
-          hint={`Bin ${formatKg(summary.bin_weight_kg)} · HH ${formatKg(summary.household_weight_kg)}`}
+          hint={t("admin.daily_trip_log.kpi.bin_hh_split", {
+            bin: formatKg(summary.bin_weight_kg),
+            hh: formatKg(summary.household_weight_kg),
+          })}
         />
         <KpiCard
           icon="pi pi-calendar"
           tone="bg-cyan-50 text-cyan-600"
-          label="Today"
+          label={t("admin.daily_trip_log.kpi.today")}
           value={kpiValue(formatKg(summary.today_weight_kg))}
-          hint="collected today"
+          hint={t("admin.daily_trip_log.kpi.collected_today")}
         />
         <KpiCard
           icon="pi pi-verified"
           tone="bg-green-50 text-green-600"
-          label="Verified"
+          label={t("admin.daily_trip_log.status.verified")}
           value={kpiValue(verifiedCount.toLocaleString())}
-          hint={`${verifiedShare}% of logs`}
+          hint={t("admin.daily_trip_log.kpi.percent_of_logs", { percent: verifiedShare })}
         />
         <KpiCard
           icon="pi pi-clock"
           tone="bg-amber-50 text-amber-600"
-          label="Unverified"
+          label={t("admin.daily_trip_log.status.unverified")}
           value={kpiValue(unverifiedCount.toLocaleString())}
-          hint="awaiting verification"
+          hint={t("admin.daily_trip_log.kpi.awaiting_verification")}
         />
       </div>
 
       {/* Fixed table layout at 100% width: columns wrap their content
           instead of widening the table, so there is no horizontal scroll. */}
       <div className="overflow-x-hidden rounded-xl border border-gray-200 bg-white p-3 shadow-sm sm:p-4">
-        <div className="mb-3 flex flex-wrap items-center gap-1.5" role="tablist" aria-label="Log status">
+        <div className="mb-3 flex flex-wrap items-center gap-1.5" role="tablist" aria-label={t("admin.daily_trip_log.export.log_status")}>
           {STATUS_TABS.map((tab) => {
             const count = tab.key ? statusCounts[tab.key] ?? 0 : summary.total_logs;
             const active = statusFilter === tab.key;
@@ -1445,7 +1491,7 @@ export default function DailyTripLogList() {
                 }`}
               >
                 <span className={`h-1.5 w-1.5 rounded-full ${active ? "bg-white" : tab.dot}`} />
-                {tab.label}
+                {t(tab.label)}
                 <span className={`tabular-nums ${active ? "text-white/80" : "text-gray-400"}`}>
                   {count.toLocaleString()}
                 </span>
@@ -1489,13 +1535,13 @@ export default function DailyTripLogList() {
             <FilterBar
               searchValue={globalFilterValue}
               onSearchChange={setGlobalFilterValue}
-              searchPlaceholder="Search trip logs..."
+              searchPlaceholder={t("admin.daily_trip_log.search_placeholder")}
               className="mb-4"
             />
           }
           stripedRows
           showGridlines
-          emptyMessage="No trip logs found. Select a company and project to load data."
+          emptyMessage={t("admin.daily_trip_log.empty_message")}
           tableStyle={{ tableLayout: "fixed", width: "100%", maxWidth: "100%" }}
           // The columns already fit the width (fixed layout, wrapping cells);
           // only the gridline borders poke a few px past it, which was enough
@@ -1510,7 +1556,7 @@ export default function DailyTripLogList() {
           />
           <Column
             field="trip_date"
-            header="Trip"
+            header={t("admin.daily_trip_log.col.trip")}
             sortable
             style={{ width: "14%" }}
             body={(row: EnrichedTripLog) => (
@@ -1525,38 +1571,38 @@ export default function DailyTripLogList() {
             )}
           />
           {locationColumn<EnrichedTripLog>({
-            header: "Location",
+            header: t("common.location"),
             style: { width: "14%" },
             levels: [
               {
-                label: "Panchayat",
+                label: t("common.panchayat"),
                 value: (row) => row.panchayat?.panchayat_name,
               },
               {
-                label: "Zone",
+                label: t("common.zone"),
                 value: (row) =>
                   row.zone?.zone_name ?? row.trip_assignment?.zone?.zone_name,
               },
-              { label: "Ward", value: wardNameOf },
+              { label: t("common.ward"), value: wardNameOf },
             ],
           })}
           <Column
             field="_driver"
-            header="Crew & Vehicle"
+            header={t("admin.daily_trip_log.col.crew_vehicle")}
             style={{ width: "16%" }}
             body={(row: EnrichedTripLog) => (
               <div className="min-w-0 space-y-0.5 text-xs">
                 <p className="truncate font-semibold text-gray-800">
                   {row._base_template || "-"}
                   {row._alt_template ? (
-                    <span className="ml-1 font-medium text-orange-600" title="Alternative (substitute) template">
+                    <span className="ml-1 font-medium text-orange-600" title={t("admin.daily_trip_log.alt_template_title")}>
                       → {row._alt_template}
                     </span>
                   ) : null}
                 </p>
                 <p
                   className="truncate text-gray-600"
-                  title={`Driver: ${row._driver || "-"} · Operator: ${row._operator || "-"}`}
+                  title={`${t("admin.daily_trip_log.driver")}: ${row._driver || "-"} · ${t("admin.daily_trip_log.operator")}: ${row._operator || "-"}`}
                 >
                   <i className="pi pi-user mr-1 text-[10px] text-gray-400" />
                   {row._driver || "-"}
@@ -1572,7 +1618,7 @@ export default function DailyTripLogList() {
           />
           <Column
             field="_waste"
-            header="Waste Type"
+            header={t("common.waste_type")}
             style={{ width: "15%" }}
             body={(row: EnrichedTripLog) => (
               <WasteTypeChips
@@ -1583,7 +1629,7 @@ export default function DailyTripLogList() {
           />
           <Column
             field="collected_weight_kg"
-            header="Weight"
+            header={t("admin.daily_trip_log.col.weight")}
             sortable
             style={{ width: "9%" }}
             body={(row: EnrichedTripLog) => {
@@ -1601,9 +1647,9 @@ export default function DailyTripLogList() {
                 <div className="min-w-0">
                   <p className="text-sm font-semibold tabular-nums text-gray-900">{formatKg((bin ?? 0) + (hh ?? 0))}</p>
                   <p className="text-[11px] tabular-nums text-gray-500">
-                    {bin != null ? `Bin ${Number(bin).toFixed(1)}` : null}
+                    {bin != null ? `${t("admin.daily_trip_log.bin_short")} ${Number(bin).toFixed(1)}` : null}
                     {bin != null && hh != null ? " · " : null}
-                    {hh != null ? `HH ${hh.toFixed(1)}` : null}
+                    {hh != null ? `${t("admin.daily_trip_log.hh_short")} ${hh.toFixed(1)}` : null}
                   </p>
                 </div>
               );
@@ -1611,7 +1657,7 @@ export default function DailyTripLogList() {
           />
           <Column
             field="actual_start_time"
-            header="Time"
+            header={t("admin.daily_trip_log.col.time")}
             style={{ width: "10%" }}
             body={(row: EnrichedTripLog) =>
               row.actual_start_time || row.actual_end_time ? (
@@ -1632,7 +1678,7 @@ export default function DailyTripLogList() {
           />
           <Column
             field="log_status"
-            header="Status"
+            header={t("common.status")}
             sortable
             style={{ width: "10%" }}
             body={(row: EnrichedTripLog) => (

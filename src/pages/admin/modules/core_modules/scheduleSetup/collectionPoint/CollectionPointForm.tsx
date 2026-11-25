@@ -103,9 +103,10 @@ const toRecordList = (value: unknown): Record<string, unknown>[] => {
 const { encScheduleSetup, encCollectionPoints } = getEncryptedRoute();
 const { listPath: ENC_LIST_PATH } = createCrudRoutePaths(encScheduleSetup, encCollectionPoints);
 
-const COLLECTION_TYPE_OPTIONS: Array<{ value: string; label: string }> = [
-  { value: "bin_collection", label: "Secondary Collection Point" },
-  { value: "bulk_waste_collection", label: "Bulk Waste Collection" },
+// labelKey is translated at render time (module-level constant must not call t()).
+const COLLECTION_TYPE_OPTIONS: Array<{ value: string; labelKey: string }> = [
+  { value: "bin_collection", labelKey: "admin.collection_point.type_bin_collection" },
+  { value: "bulk_waste_collection", labelKey: "admin.collection_point.type_bulk_waste_collection" },
 ];
 
 const COLLECTION_POINT_FIELDS: Record<string, string[]> = {
@@ -675,8 +676,8 @@ export default function CollectionPointForm() {
     let binDeleteReason = "";
     if (isEdit && id && binsToDelete.length > 0) {
       const reason = await confirmDeleteWithReason({
-        title: "Delete removed bins?",
-        text: `${binsToDelete.length} bin(s) removed from this collection point will be permanently deleted when you save.`,
+        title: t("admin.collection_point.delete_removed_bins_title"),
+        text: t("admin.collection_point.delete_removed_bins_text", { count: binsToDelete.length }),
       });
       if (reason === null) return;
       binDeleteReason = reason;
@@ -747,7 +748,7 @@ export default function CollectionPointForm() {
             }
           >
             <SelectTrigger className="input-validate w-full">
-              <SelectValue placeholder={loggedInCompanyUniqueId ? "Company from logged-in profile" : "Select Company"} />
+              <SelectValue placeholder={loggedInCompanyUniqueId ? t("common.company_from_profile") : t("admin.nav.company_placeholder")} />
             </SelectTrigger>
             <SelectContent>
               {companies.map((company) => (
@@ -770,7 +771,7 @@ export default function CollectionPointForm() {
             disabled={!companyUniqueId || projects.length === 0}
           >
             <SelectTrigger className="input-validate w-full">
-              <SelectValue placeholder="Select Project" />
+              <SelectValue placeholder={t("admin.nav.project_placeholder")} />
             </SelectTrigger>
             <SelectContent>
               {projects.map((project) => (
@@ -930,7 +931,7 @@ export default function CollectionPointForm() {
         )}
 
         <div>
-          <Label>Collection Type *</Label>
+          <Label>{t("admin.collection_point.collection_type")} *</Label>
           <Select
             value={collectionType}
             onValueChange={(v) => setCollectionType(v as CollectionPointCollectionType)}
@@ -941,7 +942,7 @@ export default function CollectionPointForm() {
             <SelectContent>
               {COLLECTION_TYPE_OPTIONS.map((option) => (
                 <SelectItem key={option.value} value={option.value}>
-                  {option.label}
+                  {t(option.labelKey)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -963,7 +964,7 @@ export default function CollectionPointForm() {
                   ? t("common.select_item_placeholder", { item: t("admin.nav.ward") })
                   : wardIds.length === 1
                     ? (wardOptions.find((w) => w.value === wardIds[0])?.label ?? wardIds[0])
-                    : `${wardIds.length} wards selected`}
+                    : t("admin.collection_point.wards_selected", { count: wardIds.length })}
               </span>
               <svg className="h-4 w-4 opacity-50 shrink-0 ml-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6"/></svg>
             </button>
@@ -971,7 +972,7 @@ export default function CollectionPointForm() {
               <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-md">
                 <div className="max-h-60 overflow-y-auto p-1">
                   {wardOptions.length === 0 ? (
-                    <p className="px-2 py-1.5 text-sm text-muted-foreground">No wards found</p>
+                    <p className="px-2 py-1.5 text-sm text-muted-foreground">{t("common.no_items_found", { item: t("admin.nav.ward") })}</p>
                   ) : (
                     wardOptions.map((w) => {
                       const checked = wardIds.includes(w.value);
@@ -980,7 +981,7 @@ export default function CollectionPointForm() {
                         <label
                           key={w.value}
                           className={`flex items-center gap-2 rounded px-2 py-1.5 text-sm ${isDisabled ? "cursor-not-allowed opacity-50" : "cursor-pointer hover:bg-accent"}`}
-                          title={isDisabled ? "Already assigned to another collection point" : undefined}
+                          title={isDisabled ? t("admin.collection_point.ward_already_assigned") : undefined}
                         >
                           <input
                             type="checkbox"
@@ -995,7 +996,7 @@ export default function CollectionPointForm() {
                             className="h-4 w-4 rounded border-gray-300"
                           />
                           {w.label}
-                          {isDisabled && <span className="ml-auto text-xs text-muted-foreground">(assigned)</span>}
+                          {isDisabled && <span className="ml-auto text-xs text-muted-foreground">({t("admin.collection_point.assigned")})</span>}
                         </label>
                       );
                     })
@@ -1008,7 +1009,7 @@ export default function CollectionPointForm() {
                       onClick={() => setWardIds([])}
                       className="text-xs text-muted-foreground hover:text-foreground"
                     >
-                      Clear all
+                      {t("admin.collection_point.clear_all")}
                     </button>
                   </div>
                 )}
@@ -1110,8 +1111,8 @@ export default function CollectionPointForm() {
         {collectionType === "bin_collection" && <div className="md:col-span-2 space-y-3">
           <div className="flex items-center justify-between border-b pb-2">
             <div>
-              <h3 className="text-sm font-semibold text-gray-800">Bins at this Collection Point</h3>
-              <p className="text-xs text-gray-500">Each bin is linked to a specific waste type. QR code is auto-generated.</p>
+              <h3 className="text-sm font-semibold text-gray-800">{t("admin.collection_point.bins_heading")}</h3>
+              <p className="text-xs text-gray-500">{t("admin.collection_point.bins_hint")}</p>
             </div>
           </div>
 
@@ -1119,42 +1120,42 @@ export default function CollectionPointForm() {
           {existingBins.map((bin, idx) => (
             <div key={bin.unique_id} className={`grid grid-cols-1 gap-3 rounded-lg border p-3 md:grid-cols-[1fr_1fr_100px_120px_auto] ${binsToDelete.includes(bin.unique_id) ? "opacity-40 line-through" : ""}`}>
               <div>
-                <Label className="text-xs text-gray-500">Waste Type</Label>
+                <Label className="text-xs text-gray-500">{t("common.waste_type")}</Label>
                 <Select
                   value={bin.waste_type_id}
                   onValueChange={(v) => setExistingBins((prev) => prev.map((b, i) => i === idx ? { ...b, waste_type_id: v } : b))}
                   disabled={binsToDelete.includes(bin.unique_id)}
                 >
-                  <SelectTrigger className="w-full h-9 text-sm"><SelectValue placeholder="Waste Type" /></SelectTrigger>
+                  <SelectTrigger className="w-full h-9 text-sm"><SelectValue placeholder={t("common.waste_type")} /></SelectTrigger>
                   <SelectContent>
                     {wasteTypeOptions.map((wt) => <SelectItem key={wt.value} value={String(wt.value)}>{wt.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               <div>
-                <Label className="text-xs text-gray-500">Bin Name</Label>
+                <Label className="text-xs text-gray-500">{t("admin.collection_point.bin_name")}</Label>
                 <Input value={bin.bin_name} onChange={(e) => setExistingBins((prev) => prev.map((b, i) => i === idx ? { ...b, bin_name: e.target.value } : b))} disabled={binsToDelete.includes(bin.unique_id)} className="h-9 text-sm" />
               </div>
               <div>
-                <Label className="text-xs text-gray-500">Capacity (L)</Label>
+                <Label className="text-xs text-gray-500">{t("common.capacity_liters")}</Label>
                 <Input type="number" min={1} value={bin.bin_capacity} onChange={(e) => setExistingBins((prev) => prev.map((b, i) => i === idx ? { ...b, bin_capacity: e.target.value } : b))} disabled={binsToDelete.includes(bin.unique_id)} className="h-9 text-sm" />
               </div>
               <div>
-                <Label className="text-xs text-gray-500">Type</Label>
+                <Label className="text-xs text-gray-500">{t("admin.collection_point.bin_size")}</Label>
                 <Select value={bin.bin_type} onValueChange={(v) => setExistingBins((prev) => prev.map((b, i) => i === idx ? { ...b, bin_type: v } : b))} disabled={binsToDelete.includes(bin.unique_id)}>
                   <SelectTrigger className="w-full h-9 text-sm"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="small">Small</SelectItem>
-                    <SelectItem value="medium">Medium</SelectItem>
-                    <SelectItem value="large">Large</SelectItem>
+                    <SelectItem value="small">{t("admin.collection_point.size_small")}</SelectItem>
+                    <SelectItem value="medium">{t("admin.collection_point.size_medium")}</SelectItem>
+                    <SelectItem value="large">{t("admin.collection_point.size_large")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="flex items-end">
                 {binsToDelete.includes(bin.unique_id) ? (
-                  <button type="button" className="rounded border px-3 py-1.5 text-xs text-blue-600" onClick={() => setBinsToDelete((prev) => prev.filter((uid) => uid !== bin.unique_id))}>Undo</button>
+                  <button type="button" className="rounded border px-3 py-1.5 text-xs text-blue-600" onClick={() => setBinsToDelete((prev) => prev.filter((uid) => uid !== bin.unique_id))}>{t("admin.collection_point.undo")}</button>
                 ) : (
-                  <button type="button" className="rounded border px-3 py-1.5 text-xs text-red-600" onClick={() => setBinsToDelete((prev) => [...prev, bin.unique_id])}>Remove</button>
+                  <button type="button" className="rounded border px-3 py-1.5 text-xs text-red-600" onClick={() => setBinsToDelete((prev) => [...prev, bin.unique_id])}>{t("common.remove")}</button>
                 )}
               </div>
             </div>
@@ -1164,9 +1165,9 @@ export default function CollectionPointForm() {
           {newBins.map((bin, idx) => (
             <div key={idx} className="grid grid-cols-1 gap-3 rounded-lg border border-dashed border-blue-300 bg-blue-50/40 p-3 md:grid-cols-[1fr_1fr_100px_120px_auto]">
               <div>
-                <Label className="text-xs text-gray-500">Waste Type *</Label>
+                <Label className="text-xs text-gray-500">{t("common.waste_type")} *</Label>
                 <Select value={bin.waste_type_id} onValueChange={(v) => setNewBins((prev) => prev.map((b, i) => i === idx ? { ...b, waste_type_id: v } : b))}>
-                  <SelectTrigger className="w-full h-9 text-sm"><SelectValue placeholder="Select waste type" /></SelectTrigger>
+                  <SelectTrigger className="w-full h-9 text-sm"><SelectValue placeholder={t("common.select_item_placeholder", { item: t("common.waste_type") })} /></SelectTrigger>
                   <SelectContent>
                     {wasteTypeOptions.map((wt) => <SelectItem key={wt.value} value={String(wt.value)}>{wt.label}</SelectItem>)}
                   </SelectContent>
@@ -1174,25 +1175,25 @@ export default function CollectionPointForm() {
               </div>
               <div>
                 <Label className="text-xs text-gray-500">Bin Name *</Label>
-                <Input placeholder="e.g. Bin 1" value={bin.bin_name} onChange={(e) => setNewBins((prev) => prev.map((b, i) => i === idx ? { ...b, bin_name: e.target.value } : b))} className="h-9 text-sm" />
+                <Input placeholder={t("admin.collection_point.bin_name_placeholder")} value={bin.bin_name} onChange={(e) => setNewBins((prev) => prev.map((b, i) => i === idx ? { ...b, bin_name: e.target.value } : b))} className="h-9 text-sm" />
               </div>
               <div>
-                <Label className="text-xs text-gray-500">Capacity (L)</Label>
+                <Label className="text-xs text-gray-500">{t("common.capacity_liters")}</Label>
                 <Input type="number" min={1} value={bin.bin_capacity} onChange={(e) => setNewBins((prev) => prev.map((b, i) => i === idx ? { ...b, bin_capacity: e.target.value } : b))} className="h-9 text-sm" />
               </div>
               <div>
-                <Label className="text-xs text-gray-500">Type</Label>
+                <Label className="text-xs text-gray-500">{t("admin.collection_point.bin_size")}</Label>
                 <Select value={bin.bin_type} onValueChange={(v) => setNewBins((prev) => prev.map((b, i) => i === idx ? { ...b, bin_type: v } : b))}>
                   <SelectTrigger className="w-full h-9 text-sm"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="small">Small</SelectItem>
-                    <SelectItem value="medium">Medium</SelectItem>
-                    <SelectItem value="large">Large</SelectItem>
+                    <SelectItem value="small">{t("admin.collection_point.size_small")}</SelectItem>
+                    <SelectItem value="medium">{t("admin.collection_point.size_medium")}</SelectItem>
+                    <SelectItem value="large">{t("admin.collection_point.size_large")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="flex items-end">
-                <button type="button" className="rounded border px-3 py-1.5 text-xs text-red-500 disabled:opacity-30" disabled={newBins.length === 1} onClick={() => setNewBins((prev) => prev.filter((_, i) => i !== idx))}>Remove</button>
+                <button type="button" className="rounded border px-3 py-1.5 text-xs text-red-500 disabled:opacity-30" disabled={newBins.length === 1} onClick={() => setNewBins((prev) => prev.filter((_, i) => i !== idx))}>{t("common.remove")}</button>
               </div>
             </div>
           ))}
@@ -1202,7 +1203,7 @@ export default function CollectionPointForm() {
             onClick={() => setNewBins((prev) => [...prev, emptyBinRow()])}
             className="flex items-center gap-1.5 rounded-lg border border-dashed border-gray-400 px-4 py-2 text-sm text-gray-600 hover:border-blue-400 hover:text-blue-600"
           >
-            <span className="text-lg leading-none">+</span> Add Bin
+            <span className="text-lg leading-none">+</span> {t("admin.collection_point.add_bin")}
           </button>
         </div>}
         {/* ── END BINS SECTION ─────────────────────────────────────────────── */}

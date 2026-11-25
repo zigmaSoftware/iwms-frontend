@@ -164,6 +164,9 @@ export interface VehicleBreakdownRecord {
   updated_at: string;
 }
 
+import type { TFunction } from "i18next";
+
+/** English fallbacks; translated via breakdownReasonLabel(). */
 export const BREAKDOWN_REASON_LABELS: Record<BreakdownReason, string> = {
   FLAT_TYRE: "Flat Tyre",
   ENGINE_FAILURE: "Engine Failure",
@@ -172,3 +175,14 @@ export const BREAKDOWN_REASON_LABELS: Record<BreakdownReason, string> = {
   OVERHEATING: "Overheating",
   OTHER: "Other",
 };
+
+/** Display label for a pending stop status ("Pending", "Missed", ...). */
+export const stopStatusLabel = (t: TFunction, status: string): string =>
+  t(`admin.vehicle_breakdown.stop_status.${String(status).toLowerCase().replace(/[^a-z0-9]+/g, "_")}`, {
+    defaultValue: status,
+  });
+
+export const breakdownReasonLabel = (t: TFunction, reason: string): string =>
+  t(`admin.vehicle_breakdown.reasons.${reason}`, {
+    defaultValue: BREAKDOWN_REASON_LABELS[reason as BreakdownReason] ?? reason,
+  });

@@ -1,3 +1,4 @@
+import i18n from "i18next";
 import type { ApiId } from "@/features/complaintTicketing/types";
 
 export const asArray = <T,>(payload: unknown): T[] => {
@@ -15,12 +16,12 @@ export const formatDateTime = (value?: string | null) => {
   return date.toLocaleString();
 };
 
-export const yesNo = (value?: boolean | null) => (value ? "Yes" : "No");
+export const yesNo = (value?: boolean | null) => (value ? i18n.t("common.yes") : i18n.t("common.no"));
 
 export const idOf = (value: ApiId | null | undefined) =>
   value === null || value === undefined ? "" : String(value);
 
-export const errorText = (error: unknown, fallback = "Request failed") => {
+export const errorText = (error: unknown, fallback: string = i18n.t("common.request_failed")) => {
   const data = (error as { response?: { data?: unknown } })?.response?.data;
   if (typeof data === "string") return data;
   if (data && typeof data === "object") return JSON.stringify(data);

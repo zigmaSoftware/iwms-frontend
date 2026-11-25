@@ -587,13 +587,13 @@ export default function AlternativeStaffTemplateForm() {
       isEdit &&
       formData.approval_status === "APPROVED"
     ) {
-      Swal.fire("Warning", "Approved records cannot be modified.", "warning");
+      Swal.fire(t("common.warning"), t("admin.alternative_staff_template.approved_locked"), "warning");
       return;
     }
 
     // from_date must be <= to_date
     if (formData.from_date && formData.to_date && formData.from_date > formData.to_date) {
-      Swal.fire("Validation Error", "From date must be on or before the To date.", "error");
+      Swal.fire(t("admin.alternative_staff_template.validation_error"), t("admin.alternative_staff_template.error_date_range"), "error");
       return;
     }
 
@@ -612,12 +612,12 @@ export default function AlternativeStaffTemplateForm() {
 
       if (overlapping.length > 0) {
         const confirm = await Swal.fire({
-          title: "Overlap Warning",
-          text: `The selected date range overlaps with ${overlapping.length} existing record(s) for this staff template. Do you want to continue?`,
+          title: t("admin.alternative_staff_template.overlap_title"),
+          text: t("admin.alternative_staff_template.overlap_text", { count: overlapping.length }),
           icon: "warning",
           showCancelButton: true,
-          confirmButtonText: "Yes, continue",
-          cancelButtonText: "Cancel",
+          confirmButtonText: t("admin.alternative_staff_template.yes_continue"),
+          cancelButtonText: t("common.cancel"),
         });
         if (!confirm.isConfirmed) return;
       }
@@ -647,7 +647,7 @@ export default function AlternativeStaffTemplateForm() {
         await alternativeStaffTemplateApi.create(payload);
       }
 
-      Swal.fire("Success", "Saved successfully", "success");
+      Swal.fire(t("common.success"), t("common.saved_success"), "success");
         // sync global filters to match the form selection before returning
         try { onGlobalCompanyChange(selectedCompanyId); } catch {}
         try { setGlobalProjectId(selectedProjectId); } catch {}
@@ -662,9 +662,9 @@ export default function AlternativeStaffTemplateForm() {
         err?.response?.data?.non_field_errors?.[0] ||
         err?.response?.data?.staff_template?.[0] ||
         err?.response?.data?.effective_date?.[0] ||
-        "Error occurred";
+        t("common.unexpected_error");
 
-      Swal.fire("Save failed", errorMessage, "error");
+      Swal.fire(t("common.save_failed"), errorMessage, "error");
     } finally {
       setLoading(false);
     }
@@ -733,8 +733,8 @@ export default function AlternativeStaffTemplateForm() {
   return (
     <div className="p-3">
       <ComponentCard
-        title={isEdit ? "Edit Alternative Staff" : "Add Alternative Staff"}
-        desc="Configure temporary or permanent staff substitution"
+        title={isEdit ? t("admin.alternative_staff_template.form_title_edit") : t("admin.alternative_staff_template.form_title_add")}
+        desc={t("admin.alternative_staff_template.form_desc")}
       >
         <form onSubmit={handleSubmit} className="space-y-6">
 
@@ -808,7 +808,7 @@ export default function AlternativeStaffTemplateForm() {
             {/* STAFF TEMPLATE — scoped to selected company + project */}
             {showField("staff_template") && (
               <div>
-                <Label>Staff Template</Label>
+                <Label>{t("admin.alternative_staff_template.staff_template")}</Label>
                 <Select
                   value={formData.staff_template}
                   options={staffTemplateOptionsWithCurrent}

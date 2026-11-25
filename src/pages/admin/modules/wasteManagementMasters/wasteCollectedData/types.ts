@@ -16,6 +16,8 @@ export type Customer = {
   company_unique_id?: string | null;
   project_id?: string | null;
   project_unique_id?: string | null;
+  // Without QR customers are count-only placeholders with no coordinates.
+  is_without_qr?: boolean;
 };
 
 // Same vocabulary as DailyTripHouseholdCollection.STATUS_CHOICES (A5).

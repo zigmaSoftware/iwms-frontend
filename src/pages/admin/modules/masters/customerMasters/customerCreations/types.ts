@@ -47,7 +47,8 @@ export interface FormDataType {
   project_id: string;
   is_active: boolean;
   is_bulkwaste_generator: boolean;
-
+  is_without_qr: boolean;
+  count: number;
 }
 
 export type Customer = {

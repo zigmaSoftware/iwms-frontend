@@ -31,6 +31,9 @@ export type FormState = {
   approval_status: string;
   status: string;
   collection_type: CollectionMode;
+  // Household mode only: which customers are auto-assigned.
+  include_with_qr: boolean;
+  include_without_qr: boolean;
 };
 
 export type TripPlanRecord = {
@@ -64,6 +67,8 @@ export type TripPlanRecord = {
   approval_status?: string;
   status?: string;
   collection_type?: CollectionMode;
+  include_with_qr?: boolean;
+  include_without_qr?: boolean;
   active_breakdown?: {
     unique_id: string;
     status: string;

@@ -264,6 +264,17 @@ export default function CustomerCreationListPage() {
     onAppliedChange: resetPage,
   });
 
+  // With QR / Without QR → `?is_without_qr=false|true`.
+const qrFilter = useOptionFilter({
+  param: "is_without_qr",
+  label: t("admin.customer_creation.qr_type", { defaultValue: "QR Type" }),
+  options: [
+    { label: t("admin.customer_creation.with_qr", { defaultValue: "With QR" }), value: "false" },
+    { label: t("admin.customer_creation.without_qr", { defaultValue: "Without QR" }), value: "true" },
+  ],
+  onAppliedChange: resetPage,
+});
+
   const { newPath: ENC_NEW_PATH, editPath: ENC_EDIT_PATH } =
     createCrudRoutePaths(encCustomerMaster, encCustomerCreation);
 
@@ -275,12 +286,15 @@ export default function CustomerCreationListPage() {
 
   const activeStatusParam = statusFilter.value;
 
+  const qrTypeParam = qrFilter.value;
+
   // ── Load data (server-side pagination) ──────────────────────────────────
   const loadRows = async (
     page: number,
     limit: number,
     search: string,
     activeStatus: string,
+    qrType: string,
     orderingParam?: string,
   ) => {
     const requestId = ++requestIdRef.current;
@@ -291,6 +305,7 @@ export default function CustomerCreationListPage() {
       if (projectId) params.project_id = projectId;
       if (search) params.search = search;
       if (activeStatus) params.active_status = activeStatus;
+      if (qrType) params.is_without_qr = qrType;
       if (orderingParam) params.ordering = orderingParam;
 
       const response = await customerCreationApi.readAllwithPaginated(
@@ -342,6 +357,7 @@ export default function CustomerCreationListPage() {
       rowsPerPage,
       globalSearchTerm,
       activeStatusParam,
+      qrTypeParam,
       ordering,
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -356,6 +372,7 @@ export default function CustomerCreationListPage() {
     rowsPerPage,
     globalSearchTerm,
     activeStatusParam,
+    qrTypeParam,
     ordering,
   ]);
 
@@ -493,6 +510,7 @@ export default function CustomerCreationListPage() {
     if (projectId) params.project_id = projectId;
     if (globalSearchTerm) params.search = globalSearchTerm;
     if (activeStatusParam) params.active_status = activeStatusParam;
+    if (qrTypeParam) params.is_without_qr = qrTypeParam;
 
     const response = await customerCreationApi.readAllForExport({ params });
     // waste_types comes back as an array of objects, which the Excel writer
@@ -607,7 +625,7 @@ export default function CustomerCreationListPage() {
   );
 
   const filterPanel = showCol("is_active")
-    ? combineFilters(companyProject, statusFilter)
+    ? combineFilters(companyProject, statusFilter, qrFilter)
     : combineFilters(companyProject);
 
   const qrTemplate = (customer: Customer) => {

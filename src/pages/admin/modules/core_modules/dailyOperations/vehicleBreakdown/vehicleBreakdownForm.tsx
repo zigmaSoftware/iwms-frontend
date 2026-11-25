@@ -1,9 +1,10 @@
 import type { PendingStopsSnapshot, VehicleBreakdownRecord } from "./types";
-import { BREAKDOWN_REASON_LABELS } from "./types";
+import { BREAKDOWN_REASON_LABELS, breakdownReasonLabel, stopStatusLabel } from "./types";
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import Swal from "@/lib/notify";
+import i18n from "i18next";
 import { useTranslation } from "react-i18next";
 import ComponentCard from "@/components/common/ComponentCard";
 import Label from "@/components/form/Label";
@@ -43,7 +44,7 @@ type AssignmentHouseholdStop = {
 
 const extractError = (error: any): string => {
   const data = error?.response?.data;
-  if (!data) return "An unexpected error occurred.";
+  if (!data) return i18n.t("common.unexpected_error");
   if (typeof data === "string") return data;
   if (typeof data?.detail === "string") return data.detail;
   if (typeof data === "object") {
@@ -51,13 +52,10 @@ const extractError = (error: any): string => {
     if (Array.isArray(first)) return String(first[0]);
     if (typeof first === "string") return first;
   }
-  return "An unexpected error occurred.";
+  return i18n.t("common.unexpected_error");
 };
 
 
-const REASON_OPTIONS: SelectOption[] = Object.entries(BREAKDOWN_REASON_LABELS).map(
-  ([v, l]) => ({ value: v, label: l }),
-);
 
 interface FormState {
   trip_assignment_id: string;
@@ -132,6 +130,10 @@ export default function VehicleBreakdownForm() {
   const location = useLocation();
   const routeState = location.state as { companyUniqueId?: string; projectId?: string } | null;
   const isEdit = Boolean(id);
+
+  const REASON_OPTIONS: SelectOption[] = Object.keys(BREAKDOWN_REASON_LABELS).map(
+    (v) => ({ value: v, label: breakdownReasonLabel(t, v) }),
+  );
 
   const {
     companyUniqueId,
@@ -337,7 +339,7 @@ export default function VehicleBreakdownForm() {
       setFieldErrors(validation.errors);
       Swal.fire(
         t("common.error"),
-        Object.values(validation.errors)[0] ?? "Please complete all required fields.",
+        Object.values(validation.errors)[0] ?? t("common.missing_fields"),
         "error",
       );
       return;
@@ -345,10 +347,10 @@ export default function VehicleBreakdownForm() {
     setFieldErrors({});
 
     if (!companyUniqueId) {
-      Swal.fire(t("common.error"), "Please select a company.", "error"); return;
+      Swal.fire(t("common.error"), t("common.select_item_placeholder", { item: t("common.company") }), "error"); return;
     }
     if (!projectId) {
-      Swal.fire(t("common.error"), "Please select a project.", "error"); return;
+      Swal.fire(t("common.error"), t("common.select_item_placeholder", { item: t("common.project") }), "error"); return;
     }
 
     setSaving(true);
@@ -383,7 +385,7 @@ export default function VehicleBreakdownForm() {
 
       await Swal.fire({
         title: t("common.success"),
-        text: isEdit ? "Breakdown record updated." : "Breakdown reported successfully. Pending approval.",
+        text: isEdit ? t("admin.vehicle_breakdown.form.updated") : t("admin.vehicle_breakdown.form.reported"),
         icon: "success",
         timer: 1800,
         showConfirmButton: false,
@@ -411,12 +413,12 @@ export default function VehicleBreakdownForm() {
       <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <h1 className="text-xl font-bold text-gray-800">
-            {isEdit ? "Edit Breakdown Record" : "Report Vehicle Breakdown"}
+            {isEdit ? t("admin.vehicle_breakdown.form.title_edit") : t("admin.vehicle_breakdown.form.title_add")}
           </h1>
           <p className="text-sm text-gray-500 mt-0.5">
             {isEdit
-              ? "Update the breakdown details."
-              : "Report a vehicle breakdown. The supervisor arranges the replacement when approving."}
+              ? t("admin.vehicle_breakdown.form.subtitle_edit")
+              : t("admin.vehicle_breakdown.form.subtitle_add")}
           </p>
         </div>
         <button
@@ -424,32 +426,32 @@ export default function VehicleBreakdownForm() {
           onClick={() => navigate(LIST_PATH)}
           className="text-sm text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg px-4 py-2"
         >
-          ← Back to List
+          ← {t("admin.vehicle_breakdown.back_to_list")}
         </button>
       </div>
 
       {/* ── Company / Project ── */}
-      <ComponentCard title="Scope">
+      <ComponentCard title={t("admin.vehicle_breakdown.form.scope")}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {isSuperAdmin && (
             <div>
-              <Label>Company <span className="text-red-500">*</span></Label>
+              <Label>{t("common.company")} <span className="text-red-500">*</span></Label>
               <Select
                 options={companies}
                 value={companyUniqueId || ""}
                 onChange={(val) => onCompanyChange(val)}
-                placeholder="Select company"
+                placeholder={t("common.select_item_placeholder", { item: t("common.company") })}
                 disabled={isEdit}
               />
             </div>
           )}
           <div>
-            <Label>Project <span className="text-red-500">*</span></Label>
+            <Label>{t("common.project")} <span className="text-red-500">*</span></Label>
             <Select
               options={projects}
               value={projectId || ""}
               onChange={(val) => setProjectId(val)}
-              placeholder="Select project"
+              placeholder={t("common.select_item_placeholder", { item: t("common.project") })}
               disabled={isEdit || (!companyUniqueId && !isSuperAdmin) || projects.length === 0}
             />
           </div>
@@ -457,59 +459,61 @@ export default function VehicleBreakdownForm() {
       </ComponentCard>
 
       {/* ── Section 1: Breakdown Details ── */}
-      <ComponentCard title="Breakdown Details">
+      <ComponentCard title={t("admin.vehicle_breakdown.form.breakdown_details")}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Trip Assignment */}
           <div className="md:col-span-2">
-            <Label>Trip Assignment <span className="text-red-500">*</span></Label>
+            <Label>{t("admin.vehicle_breakdown.form.trip_assignment")} <span className="text-red-500">*</span></Label>
             <Select
               options={assignmentOptions}
               value={form.trip_assignment_id}
               onChange={(val) => setField("trip_assignment_id", val)}
-              placeholder={fetchingDropdowns ? "Loading trips…" : "Select trip assignment"}
+              placeholder={fetchingDropdowns ? t("admin.vehicle_breakdown.form.loading_trips") : t("admin.vehicle_breakdown.form.select_trip_assignment")}
               disabled={fetchingDropdowns || isEdit || !companyUniqueId || !projectId}
             />
             <FieldError message={fieldErrors.trip_assignment_id} />
             {selectedTripDate && (
-              <p className="text-xs text-gray-400 mt-1">Trip date: <strong>{selectedTripDate}</strong></p>
+              <p className="text-xs text-gray-400 mt-1">{t("admin.vehicle_breakdown.form.trip_date_label")} <strong>{selectedTripDate}</strong></p>
             )}
           </div>
 
           {/* Auto-filled: Broken Vehicle */}
           <div>
             <InfoRow
-              label="Broken Vehicle (auto-filled)"
-              value={autoVehicleNo || (form.breakdown_vehicle_id ? `ID: ${form.breakdown_vehicle_id}` : "")}
+              label={t("admin.vehicle_breakdown.form.broken_vehicle_auto")}
+              value={autoVehicleNo || (form.breakdown_vehicle_id ? t("admin.vehicle_breakdown.form.id_value", { id: form.breakdown_vehicle_id }) : "")}
             />
             <FieldError message={fieldErrors.breakdown_vehicle_id} />
           </div>
 
           {/* Auto-filled: Original Driver */}
-          <InfoRow label="Original Driver (auto-filled)" value={autoDriver} />
+          <InfoRow label={t("admin.vehicle_breakdown.form.original_driver_auto")} value={autoDriver} />
 
           {/* Auto-filled: Original Operator */}
-          <InfoRow label="Original Operator (auto-filled)" value={autoOperator} />
+          <InfoRow label={t("admin.vehicle_breakdown.form.original_operator_auto")} value={autoOperator} />
 
           {selectedPendingStops && (
             <div className="md:col-span-2 rounded-lg border border-gray-200 bg-gray-50 p-4">
               <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-sm font-semibold text-gray-800">Remaining Collection Work</p>
+                <p className="text-sm font-semibold text-gray-800">{t("admin.vehicle_breakdown.form.remaining_work")}</p>
                 <p className="text-xs text-gray-500">
-                  {selectedPendingStops.collection_points.length} collection point(s),{" "}
-                  {selectedPendingStops.households.length} household(s)
+                  {t("admin.vehicle_breakdown.pending_counts", {
+                    points: selectedPendingStops.collection_points.length,
+                    households: selectedPendingStops.households.length,
+                  })}
                 </p>
               </div>
 
               {selectedPendingStops.collection_points.length > 0 && (
                 <div className="mt-3">
                   <p className="text-xs font-medium text-gray-600">
-                    Pending collection points available for manual carry-over at approval
+                    {t("admin.vehicle_breakdown.form.pending_points_hint")}
                   </p>
                   <div className="mt-2 max-h-36 overflow-y-auto rounded-md border border-gray-200 bg-white">
                     {selectedPendingStops.collection_points.map((cp) => (
                       <div key={cp.unique_id} className="flex items-center justify-between gap-3 border-b border-gray-100 px-3 py-2 text-xs last:border-b-0">
                         <span className="font-medium text-gray-700">{cp.name ?? cp.collection_point_id ?? cp.unique_id}</span>
-                        <span className="shrink-0 text-gray-400">{cp.status}</span>
+                        <span className="shrink-0 text-gray-400">{stopStatusLabel(t, cp.status)}</span>
                       </div>
                     ))}
                   </div>
@@ -518,31 +522,31 @@ export default function VehicleBreakdownForm() {
 
               {selectedPendingStops.households.length > 0 && (
                 <div className="mt-3 rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-800">
-                  {selectedPendingStops.households.length} un-collected household stop(s) will automatically carry over to the replacement trip.
+                  {t("admin.vehicle_breakdown.form.households_carry_over", { count: selectedPendingStops.households.length })}
                 </div>
               )}
 
               {selectedPendingStops.collection_points.length === 0 && selectedPendingStops.households.length === 0 && (
-                <p className="mt-3 text-xs text-amber-600">This trip has no pending stops to carry over.</p>
+                <p className="mt-3 text-xs text-amber-600">{t("admin.vehicle_breakdown.form.no_pending_stops")}</p>
               )}
             </div>
           )}
 
           {/* Breakdown Reason */}
           <div>
-            <Label>Breakdown Reason <span className="text-red-500">*</span></Label>
+            <Label>{t("admin.vehicle_breakdown.form.breakdown_reason")} <span className="text-red-500">*</span></Label>
             <Select
               options={REASON_OPTIONS}
               value={form.breakdown_reason}
               onChange={(val) => setField("breakdown_reason", val)}
-              placeholder="Select reason"
+              placeholder={t("admin.vehicle_breakdown.form.select_reason")}
             />
             <FieldError message={fieldErrors.breakdown_reason} />
           </div>
 
           {/* Breakdown Time */}
           <div>
-            <Label>Breakdown Time (optional)</Label>
+            <Label>{t("admin.vehicle_breakdown.form.breakdown_time")}</Label>
             <Input
               type="time"
               value={form.breakdown_time}
@@ -552,23 +556,23 @@ export default function VehicleBreakdownForm() {
 
           {/* Breakdown Latitude */}
           <div>
-            <Label>Breakdown Latitude <span className="text-red-500">*</span></Label>
+            <Label>{t("admin.vehicle_breakdown.form.breakdown_latitude")} <span className="text-red-500">*</span></Label>
             <div className="flex items-center gap-2">
               <Input
                 type="number"
                 step="any"
                 value={form.breakdown_lat}
                 onChange={(e) => setField("breakdown_lat", e.target.value)}
-                placeholder="e.g. 28.6139"
+                placeholder={t("admin.vehicle_breakdown.form.example", { value: "28.6139" })}
               />
               <AutoDetectLocationButton
                 onDetected={({ latitude, longitude }) => {
                   setField("breakdown_lat", String(latitude));
                   setField("breakdown_lng", String(longitude));
                 }}
-                label="Detect"
+                label={t("admin.vehicle_breakdown.form.detect")}
                 className="shrink-0 whitespace-nowrap"
-                title="Auto-detect current GPS coordinates"
+                title={t("admin.vehicle_breakdown.form.detect_title")}
               />
             </div>
             <FieldError message={fieldErrors.breakdown_lat} />
@@ -576,52 +580,52 @@ export default function VehicleBreakdownForm() {
 
           {/* Breakdown Longitude */}
           <div>
-            <Label>Breakdown Longitude <span className="text-red-500">*</span></Label>
+            <Label>{t("admin.vehicle_breakdown.form.breakdown_longitude")} <span className="text-red-500">*</span></Label>
             <Input
               type="number"
               step="any"
               value={form.breakdown_lng}
               onChange={(e) => setField("breakdown_lng", e.target.value)}
-              placeholder="e.g. 77.2090"
+              placeholder={t("admin.vehicle_breakdown.form.example", { value: "77.2090" })}
             />
             <FieldError message={fieldErrors.breakdown_lng} />
           </div>
 
           {/* Collected Weight Before Breakdown */}
           <div>
-            <Label>Collected Weight Before Breakdown (kg) — optional</Label>
+            <Label>{t("admin.vehicle_breakdown.form.weight_before")}</Label>
             <Input
               type="number"
               step="any"
               min="0"
               value={form.collected_weight_before_breakdown_kg}
               onChange={(e) => setField("collected_weight_before_breakdown_kg", e.target.value)}
-              placeholder="e.g. 120.5"
+              placeholder={t("admin.vehicle_breakdown.form.example", { value: "120.5" })}
             />
             <p className="text-xs text-gray-400 mt-1">
-              Weight already collected by the broken vehicle before the breakdown occurred.
+              {t("admin.vehicle_breakdown.form.weight_before_hint")}
             </p>
           </div>
 
           {/* Breakdown Location */}
           <div className="md:col-span-2">
-            <Label>Breakdown Location (optional)</Label>
+            <Label>{t("admin.vehicle_breakdown.form.breakdown_location")}</Label>
             <Input
               type="text"
               value={form.breakdown_location}
               onChange={(e) => setField("breakdown_location", e.target.value)}
-              placeholder="e.g. Near Main Road Junction, Ward 5"
+              placeholder={t("admin.vehicle_breakdown.form.location_placeholder")}
             />
           </div>
 
           {/* Breakdown Remarks */}
           <div className="md:col-span-2">
-            <Label>Breakdown Remarks (optional)</Label>
+            <Label>{t("admin.vehicle_breakdown.form.breakdown_remarks")}</Label>
             <textarea
               rows={2}
               value={form.breakdown_remarks}
               onChange={(e) => setField("breakdown_remarks", e.target.value)}
-              placeholder="Additional notes about the breakdown…"
+              placeholder={t("admin.vehicle_breakdown.form.remarks_placeholder")}
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 resize-none"
             />
           </div>
@@ -629,7 +633,7 @@ export default function VehicleBreakdownForm() {
           {/* Photo Evidence — create only, matches the backend's perform_create-only handling */}
           {!isEdit && (
             <div className="md:col-span-2">
-              <Label>Photos (optional)</Label>
+              <Label>{t("admin.vehicle_breakdown.form.photos")}</Label>
               <input
                 type="file"
                 accept="image/*"
@@ -638,7 +642,7 @@ export default function VehicleBreakdownForm() {
                 className="block w-full text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-orange-50 file:px-3 file:py-2 file:text-sm file:font-medium file:text-orange-700 hover:file:bg-orange-100"
               />
               {photos.length > 0 && (
-                <p className="mt-1 text-xs text-gray-500">{photos.length} photo(s) selected.</p>
+                <p className="mt-1 text-xs text-gray-500">{t("admin.vehicle_breakdown.form.photos_selected", { count: photos.length })}</p>
               )}
             </div>
           )}
@@ -646,9 +650,7 @@ export default function VehicleBreakdownForm() {
       </ComponentCard>
 
       <div className="rounded-xl bg-blue-50 border border-blue-100 px-4 py-3 text-xs text-blue-800">
-        <strong>Note:</strong> The supervisor picks the replacement vehicle and crew at
-        Verify &amp; Approve. The replacement trip is then created, carrying over the remaining
-        stops from this trip.
+        <strong>{t("admin.vehicle_breakdown.form.note_label")}</strong> {t("admin.vehicle_breakdown.form.note_text")}
       </div>
 
       {/* ── Submit ── */}
@@ -658,7 +660,7 @@ export default function VehicleBreakdownForm() {
           onClick={() => navigate(LIST_PATH)}
           className="px-5 py-2 rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 font-medium"
         >
-          Cancel
+          {t("common.cancel")}
         </button>
         <button
           type="submit"
@@ -668,10 +670,10 @@ export default function VehicleBreakdownForm() {
           {saving ? (
             <>
               <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-              Saving…
+              {t("common.saving")}
             </>
           ) : (
-            isEdit ? "Update Record" : "Report Breakdown"
+            isEdit ? t("admin.vehicle_breakdown.form.update_record") : t("admin.vehicle_breakdown.report_breakdown")
           )}
         </button>
       </div>

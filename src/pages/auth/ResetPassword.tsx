@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { api } from "@/api";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -26,6 +27,7 @@ function getPasswordStrength(pwd: string): { level: StrengthLevel; label: string
 
 export default function ResetPassword() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const location = useLocation();
   const state = location.state as { resetToken?: string } | null;
 
@@ -45,15 +47,15 @@ export default function ResetPassword() {
     setError("");
 
     if (!resetToken) {
-      setError("Invalid session. Please start the password reset process again.");
+      setError(t("login.reset.invalid_session"));
       return;
     }
     if (newPassword.length < 6) {
-      setError("Password must be at least 6 characters.");
+      setError(t("login.reset.min_length", { count: 6 }));
       return;
     }
     if (newPassword !== confirmPassword) {
-      setError("Passwords do not match.");
+      setError(t("login.reset.mismatch"));
       return;
     }
 
@@ -65,10 +67,10 @@ export default function ResetPassword() {
         confirm_password: confirmPassword,
       });
       navigate("/auth", {
-        state: { successMessage: "Password reset successfully. Please log in with your new password." },
+        state: { successMessage: t("login.reset.success") },
       });
     } catch (err: any) {
-      setError(err?.response?.data?.message || "Failed to reset password. Please try again.");
+      setError(err?.response?.data?.message || t("login.reset.failed"));
     } finally {
       setLoading(false);
     }
@@ -96,10 +98,10 @@ export default function ResetPassword() {
             </div>
 
             <CardTitle className="text-2xl font-bold tracking-tight text-gray-900">
-              Reset Password
+              {t("login.reset.title")}
             </CardTitle>
             <CardDescription className="text-sm text-gray-500 mt-1 leading-relaxed">
-              Choose a strong new password for your account.
+              {t("login.reset.subtitle")}
             </CardDescription>
           </CardHeader>
 
@@ -114,13 +116,13 @@ export default function ResetPassword() {
               {/* New Password */}
               <div className="space-y-1.5">
                 <Label htmlFor="new_password" className="text-[11px] font-bold uppercase tracking-widest text-gray-500">
-                  New Password
+                  {t("login.reset.new_password")}
                 </Label>
                 <div className="relative">
                   <Input
                     id="new_password"
                     type={showNew ? "text" : "password"}
-                    placeholder="Enter new password"
+                    placeholder={t("login.reset.new_password_placeholder")}
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     className="h-12 rounded-xl border-slate-200 bg-slate-50 pr-12 text-gray-900 placeholder:text-gray-400 focus-visible:border-green-400 focus-visible:ring-green-300/50"
@@ -147,7 +149,7 @@ export default function ResetPassword() {
                       strength.level === "good" ? "text-yellow-500" :
                       "text-green-600"
                     }`}>
-                      {strength.label}
+                      {t(`login.reset.strength_${strength.level}`)}
                     </p>
                   </div>
                 )}
@@ -156,13 +158,13 @@ export default function ResetPassword() {
               {/* Confirm Password */}
               <div className="space-y-1.5">
                 <Label htmlFor="confirm_password" className="text-[11px] font-bold uppercase tracking-widest text-gray-500">
-                  Confirm Password
+                  {t("login.reset.confirm_password")}
                 </Label>
                 <div className="relative">
                   <Input
                     id="confirm_password"
                     type={showConfirm ? "text" : "password"}
-                    placeholder="Re-enter new password"
+                    placeholder={t("login.reset.confirm_password_placeholder")}
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     className={`h-12 rounded-xl border-slate-200 bg-slate-50 pr-12 text-gray-900 placeholder:text-gray-400 focus-visible:ring-green-300/50 transition-all ${
@@ -183,10 +185,10 @@ export default function ResetPassword() {
                   </button>
                 </div>
                 {confirmPassword && !passwordsMatch && (
-                  <p className="text-xs text-red-500 font-medium">Passwords do not match.</p>
+                  <p className="text-xs text-red-500 font-medium">{t("login.reset.mismatch")}</p>
                 )}
                 {passwordsMatch && (
-                  <p className="text-xs text-green-600 font-medium">Passwords match.</p>
+                  <p className="text-xs text-green-600 font-medium">{t("login.reset.match")}</p>
                 )}
               </div>
 
@@ -201,10 +203,10 @@ export default function ResetPassword() {
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z" />
                     </svg>
-                    Resetting…
+                    {t("login.reset.resetting")}
                   </>
                 ) : (
-                  "Reset Password"
+                  t("login.reset.title")
                 )}
               </Button>
             </form>

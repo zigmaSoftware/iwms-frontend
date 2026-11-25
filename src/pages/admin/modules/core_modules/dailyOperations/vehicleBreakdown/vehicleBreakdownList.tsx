@@ -4,10 +4,11 @@ import type {
   ApprovalStatus,
   VerifyPreview,
 } from "./types";
-import { BREAKDOWN_REASON_LABELS } from "./types";
+import { breakdownReasonLabel, stopStatusLabel } from "./types";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import Swal from "@/lib/notify";
+import i18n from "i18next";
 import { confirmDeleteWithReason, withDeleteReason } from "@/utils/deleteReason";
 import { useTranslation } from "react-i18next";
 
@@ -61,36 +62,42 @@ const STATUS_STYLES: Record<BreakdownStatus, string> = {
   REPLACEMENT_ARRANGED: "bg-blue-100 text-blue-800",
   REJECTED: "bg-red-100 text-red-800",
 };
-const STATUS_LABELS: Record<BreakdownStatus, string> = {
-  REPORTED: "Reported",
-  REPLACEMENT_ARRANGED: "Replacement Arranged",
-  REJECTED: "Rejected",
-};
 const APPROVAL_STYLES: Record<ApprovalStatus, string> = {
   PENDING: "bg-yellow-100 text-yellow-800",
   APPROVED: "bg-green-100 text-green-800",
   REJECTED: "bg-red-100 text-red-800",
 };
 
-const StatusBadge = ({ value }: { value: BreakdownStatus }) => (
-  <span
-    className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${STATUS_STYLES[value] ?? "bg-gray-100 text-gray-600"}`}
-  >
-    {STATUS_LABELS[value] ?? value}
-  </span>
-);
+const statusLabel = (t: (k: string, o?: any) => string, value: string) =>
+  t(`admin.vehicle_breakdown.status.${value}`, { defaultValue: value });
+const approvalLabel = (t: (k: string, o?: any) => string, value: string) =>
+  t(`admin.vehicle_breakdown.approval.${value}`, { defaultValue: value });
 
-const ApprovalBadge = ({ value }: { value: ApprovalStatus }) => (
-  <span
-    className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${APPROVAL_STYLES[value] ?? "bg-gray-100 text-gray-600"}`}
-  >
-    {value}
-  </span>
-);
+const StatusBadge = ({ value }: { value: BreakdownStatus }) => {
+  const { t } = useTranslation();
+  return (
+    <span
+      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${STATUS_STYLES[value] ?? "bg-gray-100 text-gray-600"}`}
+    >
+      {statusLabel(t, value)}
+    </span>
+  );
+};
+
+const ApprovalBadge = ({ value }: { value: ApprovalStatus }) => {
+  const { t } = useTranslation();
+  return (
+    <span
+      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${APPROVAL_STYLES[value] ?? "bg-gray-100 text-gray-600"}`}
+    >
+      {approvalLabel(t, value)}
+    </span>
+  );
+};
 
 const extractError = (error: any): string => {
   const data = error?.response?.data;
-  if (!data) return "An unexpected error occurred.";
+  if (!data) return i18n.t("common.unexpected_error");
   if (typeof data === "string") return data;
   if (typeof data?.detail === "string") return data.detail;
   if (typeof data === "object") {
@@ -98,7 +105,7 @@ const extractError = (error: any): string => {
     if (Array.isArray(first)) return String(first[0]);
     if (typeof first === "string") return first;
   }
-  return "An unexpected error occurred.";
+  return i18n.t("common.unexpected_error");
 };
 
 const displayValue = (value: string | number | null | undefined) => {
@@ -157,6 +164,7 @@ function ViewDialog({
   row: VehicleBreakdownRecord;
   onClose: () => void;
 }) {
+  const { t } = useTranslation();
   const originalVehicle =
     row.breakdown_vehicle_detail?.vehicle_no ?? row.breakdown_vehicle_id;
   const replacementVehicle =
@@ -175,7 +183,7 @@ function ViewDialog({
     ? `${altTemplate.display_code ?? altTemplate.unique_id} (${altTemplate.unique_id})`
     : row.alt_staff_template_id;
   const altTemplateCrew = altTemplate
-    ? `${altTemplate.driver?.name ?? altTemplate.driver?.unique_id ?? "Driver"} / ${altTemplate.operator?.name ?? altTemplate.operator?.unique_id ?? "Operator"}`
+    ? `${altTemplate.driver?.name ?? altTemplate.driver?.unique_id ?? t("admin.vehicle_breakdown.driver")} / ${altTemplate.operator?.name ?? altTemplate.operator?.unique_id ?? t("admin.vehicle_breakdown.operator")}`
     : null;
   const hasPendingStops = !!row.pending_stops;
 
@@ -186,7 +194,7 @@ function ViewDialog({
       header={
         <div>
           <p className="text-lg font-bold text-gray-800">
-            Vehicle Breakdown Details
+            {t("admin.vehicle_breakdown.view.title")}
           </p>
           <p className="mt-0.5 text-xs font-normal text-gray-400">
             {row.unique_id}
@@ -201,7 +209,7 @@ function ViewDialog({
       footer={
         <div className="flex justify-end">
           <Button
-            label="Close"
+            label={t("admin.vehicle_breakdown.close")}
             className="p-button-text p-button-secondary"
             onClick={onClose}
           />
@@ -211,19 +219,19 @@ function ViewDialog({
       <div className="space-y-5 pt-2">
         <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
           <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-            <p className="text-xs font-medium text-gray-500">Status</p>
+            <p className="text-xs font-medium text-gray-500">{t("common.status")}</p>
             <div className="mt-2">
               <StatusBadge value={row.status} />
             </div>
           </div>
           <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-            <p className="text-xs font-medium text-gray-500">Approval</p>
+            <p className="text-xs font-medium text-gray-500">{t("admin.vehicle_breakdown.approval_label")}</p>
             <div className="mt-2">
               <ApprovalBadge value={row.approval_status} />
             </div>
           </div>
           <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-            <p className="text-xs font-medium text-gray-500">New Trip</p>
+            <p className="text-xs font-medium text-gray-500">{t("admin.vehicle_breakdown.new_trip")}</p>
             <p className="mt-2 break-words font-mono text-sm text-green-700">
               {displayValue(row.new_assignment_id)}
             </p>
@@ -232,31 +240,31 @@ function ViewDialog({
 
         <div className="rounded-lg border border-gray-200">
           <div className="grid grid-cols-1 gap-2 border-b border-gray-200 bg-gray-50 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500 lg:grid-cols-[170px_minmax(0,1fr)_minmax(0,1fr)]">
-            <span>Field</span>
-            <span>Original</span>
-            <span>Replacement / Changed To</span>
+            <span>{t("admin.vehicle_breakdown.view.field")}</span>
+            <span>{t("admin.vehicle_breakdown.view.original")}</span>
+            <span>{t("admin.vehicle_breakdown.view.changed_to")}</span>
           </div>
           <div className="px-4">
             <DetailRow
-              label="Vehicle"
+              label={t("common.vehicle")}
               before={originalVehicle}
               after={replacementVehicle}
               highlight
             />
             <DetailRow
-              label="Driver"
+              label={t("admin.vehicle_breakdown.driver")}
               before={originalDriver}
               after={replacementDriver}
               highlight
             />
             <DetailRow
-              label="Operator"
+              label={t("admin.vehicle_breakdown.operator")}
               before={originalOperator}
               after={replacementOperator}
               highlight
             />
             <DetailRow
-              label="Trip"
+              label={t("admin.vehicle_breakdown.trip")}
               before={row.trip_assignment_id}
               after={row.new_assignment_id}
               highlight={!!row.new_assignment_id}
@@ -267,27 +275,24 @@ function ViewDialog({
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div className="rounded-lg border border-gray-200 px-4 py-3">
             <p className="mb-2 text-sm font-semibold text-gray-800">
-              Breakdown
+              {t("admin.vehicle_breakdown.breakdown")}
             </p>
             <ReadOnlyRow
-              label="Trip Date"
+              label={t("admin.vehicle_breakdown.trip_date")}
               value={row.trip_assignment_detail?.trip_date}
             />
             <ReadOnlyRow
-              label="Panchayat"
+              label={t("common.panchayat")}
               value={row.trip_assignment_detail?.panchayat_name}
             />
             <ReadOnlyRow
-              label="Reason"
-              value={
-                BREAKDOWN_REASON_LABELS[row.breakdown_reason] ??
-                row.breakdown_reason
-              }
+              label={t("admin.vehicle_breakdown.reason")}
+              value={breakdownReasonLabel(t, row.breakdown_reason)}
             />
-            <ReadOnlyRow label="Time" value={row.breakdown_time} />
-            <ReadOnlyRow label="Location" value={row.breakdown_location} />
+            <ReadOnlyRow label={t("admin.vehicle_breakdown.view.time")} value={row.breakdown_time} />
+            <ReadOnlyRow label={t("common.location")} value={row.breakdown_location} />
             <ReadOnlyRow
-              label="Coordinates"
+              label={t("admin.vehicle_breakdown.view.coordinates")}
               value={
                 row.breakdown_lat && row.breakdown_lng
                   ? `${row.breakdown_lat}, ${row.breakdown_lng}`
@@ -295,7 +300,7 @@ function ViewDialog({
               }
             />
             <ReadOnlyRow
-              label="Weight Before"
+              label={t("admin.vehicle_breakdown.view.weight_before")}
               value={
                 row.collected_weight_before_breakdown_kg
                   ? `${row.collected_weight_before_breakdown_kg} kg`
@@ -305,45 +310,47 @@ function ViewDialog({
           </div>
 
           <div className="rounded-lg border border-gray-200 px-4 py-3">
-            <p className="mb-2 text-sm font-semibold text-gray-800">Approval</p>
+            <p className="mb-2 text-sm font-semibold text-gray-800">{t("admin.vehicle_breakdown.approval_label")}</p>
             <ReadOnlyRow
-              label="Approved By"
+              label={t("admin.vehicle_breakdown.view.approved_by")}
               value={row.approved_by_detail?.name ?? row.approved_by}
             />
-            <ReadOnlyRow label="Approved At" value={row.approved_at} />
+            <ReadOnlyRow label={t("admin.vehicle_breakdown.view.approved_at")} value={row.approved_at} />
             <ReadOnlyRow
-              label="Alternative Template"
+              label={t("admin.vehicle_breakdown.view.alt_template")}
               value={altTemplateLabel}
             />
-            <ReadOnlyRow label="Alternative Crew" value={altTemplateCrew} />
+            <ReadOnlyRow label={t("admin.vehicle_breakdown.view.alt_crew")} value={altTemplateCrew} />
             <ReadOnlyRow
-              label="Change Reason"
+              label={t("admin.vehicle_breakdown.view.change_reason")}
               value={altTemplate?.change_reason}
             />
             <ReadOnlyRow
-              label="Change Remarks"
+              label={t("admin.vehicle_breakdown.view.change_remarks")}
               value={altTemplate?.change_remarks}
             />
             <ReadOnlyRow
-              label="Rejected Reason"
+              label={t("admin.vehicle_breakdown.view.rejected_reason")}
               value={row.rejection_remarks}
             />
-            <ReadOnlyRow label="Created At" value={row.created_at} />
-            <ReadOnlyRow label="Updated At" value={row.updated_at} />
+            <ReadOnlyRow label={t("common.created_at")} value={row.created_at} />
+            <ReadOnlyRow label={t("common.updated_at")} value={row.updated_at} />
           </div>
         </div>
 
         {hasPendingStops && (
           <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-800">
-            Pending work at view time:{" "}
-            {row.pending_stops!.collection_points.length} collection point(s),{" "}
-            {row.pending_stops!.households.length} household(s).
+            {t("admin.vehicle_breakdown.view.pending_work")}{" "}
+            {t("admin.vehicle_breakdown.pending_counts", {
+              points: row.pending_stops!.collection_points.length,
+              households: row.pending_stops!.households.length,
+            })}
           </div>
         )}
 
         {row.breakdown_remarks && (
           <div className="rounded-lg border border-gray-200 px-4 py-3">
-            <p className="mb-2 text-sm font-semibold text-gray-800">Remarks</p>
+            <p className="mb-2 text-sm font-semibold text-gray-800">{t("admin.vehicle_breakdown.remarks")}</p>
             <p className="whitespace-pre-wrap text-sm text-gray-700">
               {row.breakdown_remarks}
             </p>
@@ -374,6 +381,7 @@ function VerifyDialog({
   ) => void;
   isLoading: boolean;
 }) {
+  const { t } = useTranslation();
   const [remarks, setRemarks] = useState("");
   // The supervisor picks the replacement vehicle and crew here (the driver
   // reports from the app without them). A choice made when reporting on the
@@ -442,12 +450,12 @@ function VerifyDialog({
           operator_name?: string;
         }[] = Array.isArray(data) ? data : [];
         const opts = list
-          .filter((t) => t.unique_id && t.driver_id && t.operator_id)
-          .map((t) => ({
-            value: t.unique_id!,
-            label: `${t.display_code ?? t.unique_id} — ${t.driver_name ?? "Driver"} / ${t.operator_name ?? "Operator"}`,
-            driverId: t.driver_id!,
-            operatorId: t.operator_id!,
+          .filter((tpl) => tpl.unique_id && tpl.driver_id && tpl.operator_id)
+          .map((tpl) => ({
+            value: tpl.unique_id!,
+            label: `${tpl.display_code ?? tpl.unique_id} — ${tpl.driver_name ?? t("admin.vehicle_breakdown.driver")} / ${tpl.operator_name ?? t("admin.vehicle_breakdown.operator")}`,
+            driverId: tpl.driver_id!,
+            operatorId: tpl.operator_id!,
           }));
         if (row.replacement_driver_id && row.replacement_operator_id) {
           const match = opts.find(
@@ -460,7 +468,10 @@ function VerifyDialog({
           } else {
             opts.unshift({
               value: "__current__",
-              label: `Current replacement — ${row.replacement_driver_detail?.name ?? "Driver"} / ${row.replacement_operator_detail?.name ?? "Operator"}`,
+              label: t("admin.vehicle_breakdown.verify.current_replacement", {
+                driver: row.replacement_driver_detail?.name ?? t("admin.vehicle_breakdown.driver"),
+                operator: row.replacement_operator_detail?.name ?? t("admin.vehicle_breakdown.operator"),
+              }),
               driverId: row.replacement_driver_id,
               operatorId: row.replacement_operator_id,
             });
@@ -504,7 +515,7 @@ function VerifyDialog({
         if (cancelled) return;
         setPreviewState({ vehicleId: replacementVehicleId, data, error: null });
         setSelectedTrips(
-          data.upcoming_trips.filter((t) => t.default_move).map((t) => t.unique_id),
+          data.upcoming_trips.filter((trip) => trip.default_move).map((trip) => trip.unique_id),
         );
         setSelectedPlans(
           data.plans
@@ -561,18 +572,18 @@ function VerifyDialog({
     (!isBinTrip || selectedCps.length > 0);
   const replacementNo =
     vehicleOptions.find((o) => o.value === replacementVehicleId)?.label ??
-    "the replacement vehicle";
+    t("admin.vehicle_breakdown.verify.the_replacement_vehicle");
 
   const footer = (
     <div className="flex justify-end gap-2 pt-2">
       <Button
-        label="Cancel"
+        label={t("common.cancel")}
         className="p-button-text p-button-secondary"
         onClick={onClose}
         disabled={isLoading}
       />
       <Button
-        label="Approve & Start Replacement Trip"
+        label={t("admin.vehicle_breakdown.verify.confirm")}
         icon="pi pi-check"
         className="p-button-success"
         loading={isLoading}
@@ -598,7 +609,7 @@ function VerifyDialog({
       header={
         <div>
           <p className="text-lg font-bold text-gray-800">
-            Verify & Approve Breakdown
+            {t("admin.vehicle_breakdown.verify.title")}
           </p>
           <p className="text-xs text-gray-400 font-normal mt-0.5">
             {row.unique_id}
@@ -614,15 +625,15 @@ function VerifyDialog({
       <div className="flex flex-col gap-4 pt-2">
         <div className="rounded-lg bg-gray-50 border border-gray-100 p-4 text-sm space-y-2">
           {[
-            ["Trip ID", row.trip_assignment_id],
-            ["Trip Date", row.trip_assignment_detail?.trip_date ?? "-"],
+            [t("admin.vehicle_breakdown.trip_id"), row.trip_assignment_id],
+            [t("admin.vehicle_breakdown.trip_date"), row.trip_assignment_detail?.trip_date ?? "-"],
             [
-              "Broken Vehicle",
+              t("admin.vehicle_breakdown.broken_vehicle"),
               row.breakdown_vehicle_detail?.vehicle_no ??
                 row.breakdown_vehicle_id,
             ],
             [
-              "Original Crew",
+              t("admin.vehicle_breakdown.verify.original_crew"),
               originalCrew
                 ? `${originalCrew.driver ?? "-"} / ${originalCrew.operator ?? "-"}`
                 : "-",
@@ -636,10 +647,10 @@ function VerifyDialog({
         </div>
 
         <div className="rounded-lg border border-gray-200 p-3 space-y-3">
-          <p className="text-sm font-semibold text-gray-700">Replacement</p>
+          <p className="text-sm font-semibold text-gray-700">{t("admin.vehicle_breakdown.replacement")}</p>
           <div>
             <p className="text-sm font-medium text-gray-700 mb-1.5">
-              Replacement Vehicle <span className="text-red-500">*</span>
+              {t("admin.vehicle_breakdown.replacement_vehicle")} <span className="text-red-500">*</span>
             </p>
             {/* Native select: a popover list would open behind this dialog. */}
             <select
@@ -650,10 +661,10 @@ function VerifyDialog({
             >
               <option value="">
                 {loadingVehicles
-                  ? "Loading available vehicles…"
+                  ? t("admin.vehicle_breakdown.verify.loading_vehicles")
                   : vehicleOptions.length === 0
-                    ? "No vehicles available for this date"
-                    : "Select replacement vehicle"}
+                    ? t("admin.vehicle_breakdown.verify.no_vehicles")
+                    : t("admin.vehicle_breakdown.verify.select_vehicle")}
               </option>
               {vehicleOptions.map((o) => (
                 <option key={o.value} value={o.value}>
@@ -662,12 +673,12 @@ function VerifyDialog({
               ))}
             </select>
             <p className="text-xs text-gray-500 mt-1">
-              Active vehicles, not under breakdown, free on this date.
+              {t("admin.vehicle_breakdown.verify.vehicle_hint")}
             </p>
           </div>
           <div>
             <p className="text-sm font-medium text-gray-700 mb-1.5">
-              Replacement Driver &amp; Operator <span className="text-red-500">*</span>
+              {t("admin.vehicle_breakdown.verify.replacement_crew")} <span className="text-red-500">*</span>
             </p>
             <select
               className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
@@ -677,20 +688,20 @@ function VerifyDialog({
             >
               <option value="">
                 {loadingCrews
-                  ? "Loading available staff…"
+                  ? t("admin.vehicle_breakdown.verify.loading_staff")
                   : crewOptions.length === 0
-                    ? "No staff templates available for this date"
-                    : "Select staff template"}
+                    ? t("admin.vehicle_breakdown.verify.no_staff")
+                    : t("admin.vehicle_breakdown.verify.select_staff")}
               </option>
               {crewOptions.map((o) => (
                 <option key={o.value} value={o.value}>
                   {o.label}
-                  {o === sameCrewOption ? " (same crew)" : ""}
+                  {o === sameCrewOption ? ` ${t("admin.vehicle_breakdown.verify.same_crew")}` : ""}
                 </option>
               ))}
             </select>
             <p className="text-xs text-gray-500 mt-1">
-              Defaults to the same crew carrying on with the replacement vehicle.
+              {t("admin.vehicle_breakdown.verify.crew_hint")}
             </p>
           </div>
         </div>
@@ -698,8 +709,7 @@ function VerifyDialog({
         {isBinTrip && (
           <div className="rounded-lg border border-gray-200 p-3">
             <p className="text-sm font-medium text-gray-700 mb-2">
-              Remaining collection points ({pending!.collection_points.length})
-              — select which move to the replacement trip
+              {t("admin.vehicle_breakdown.verify.remaining_points", { count: pending!.collection_points.length })}
             </p>
             <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1">
               {pending!.collection_points.map((cp) => (
@@ -715,13 +725,13 @@ function VerifyDialog({
                   <span>
                     {cp.name ?? cp.collection_point_id ?? cp.unique_id}
                   </span>
-                  <span className="text-xs text-gray-400">({cp.status})</span>
+                  <span className="text-xs text-gray-400">({stopStatusLabel(t, cp.status)})</span>
                 </label>
               ))}
             </div>
             {isBinTrip && selectedCps.length === 0 && (
               <p className="text-xs text-red-500 mt-2">
-                Select at least one collection point to carry over.
+                {t("admin.vehicle_breakdown.verify.select_one_point")}
               </p>
             )}
           </div>
@@ -729,31 +739,29 @@ function VerifyDialog({
 
         {isHouseholdTrip && (
           <div className="rounded-lg bg-blue-50 border border-blue-100 p-3 text-xs text-blue-800">
-            <strong>{pending!.households.length}</strong> un-collected house(s)
-            will automatically carry over to the replacement trip.
+            {t("admin.vehicle_breakdown.form.households_carry_over", { count: pending!.households.length })}
           </div>
         )}
 
         {previewError && (
           <p className="text-xs text-red-600">
-            Could not load the vehicle's other trips: {previewError}
+            {t("admin.vehicle_breakdown.verify.preview_error", { error: previewError })}
           </p>
         )}
         {!preview && !previewError && (
-          <p className="text-xs text-gray-400">Checking the replacement vehicle…</p>
+          <p className="text-xs text-gray-400">{t("admin.vehicle_breakdown.verify.checking")}</p>
         )}
 
         {preview && preview.upcoming_trips.length > 0 && (
           <div className="rounded-lg border border-gray-200 p-3">
             <p className="text-sm font-medium text-gray-700">
-              Other trips of{" "}
-              {row.breakdown_vehicle_detail?.vehicle_no ?? "this vehicle"} (
-              {preview.upcoming_trips.length})
+              {t("admin.vehicle_breakdown.verify.other_trips", {
+                vehicle: row.breakdown_vehicle_detail?.vehicle_no ?? t("admin.vehicle_breakdown.verify.this_vehicle"),
+                count: preview.upcoming_trips.length,
+              })}
             </p>
             <p className="text-xs text-gray-500 mb-2">
-              Ticked trips move to {replacementNo} with their own crew. Unticked
-              trips stay on the broken vehicle and cannot start — move them with
-              "Change Vehicle" on the Daily Trip Plan.
+              {t("admin.vehicle_breakdown.verify.other_trips_hint", { vehicle: replacementNo })}
             </p>
             <div className="max-h-56 overflow-y-auto space-y-2 pr-1">
               {preview.upcoming_trips.map((trip) => (
@@ -764,7 +772,7 @@ function VerifyDialog({
                       checked={selectedTrips.includes(trip.unique_id)}
                       onChange={() => toggleTrip(trip.unique_id)}
                     />
-                    <span>Move to {replacementNo}</span>
+                    <span>{t("admin.vehicle_breakdown.verify.move_to", { vehicle: replacementNo })}</span>
                     <span className="font-mono text-xs text-blue-700">
                       {trip.unique_id}
                     </span>
@@ -780,14 +788,16 @@ function VerifyDialog({
                   </label>
                   {trip.replacement_busy.length > 0 && (
                     <p className="ml-6 text-xs text-amber-700">
-                      ⚠ {replacementNo} already has{" "}
-                      {trip.replacement_busy
-                        .map(
-                          (b) =>
-                            `${b.unique_id}${b.scheduled_time ? ` at ${b.scheduled_time.slice(0, 5)}` : ""}`,
-                        )
-                        .join(", ")}{" "}
-                      that day.
+                      ⚠ {t("admin.vehicle_breakdown.verify.already_has", {
+                        vehicle: replacementNo,
+                        trips: trip.replacement_busy
+                          .map((b) =>
+                            b.scheduled_time
+                              ? t("admin.vehicle_breakdown.verify.trip_at", { trip: b.unique_id, time: b.scheduled_time.slice(0, 5) })
+                              : b.unique_id,
+                          )
+                          .join(", "),
+                      })}
                     </p>
                   )}
                 </div>
@@ -799,13 +809,14 @@ function VerifyDialog({
         {preview && preview.plans.length > 0 && (
           <div className="rounded-lg border border-gray-200 p-3">
             <p className="text-sm font-medium text-gray-700">
-              Use {replacementNo} for upcoming days until repaired
+              {t("admin.vehicle_breakdown.verify.use_until_repaired", { vehicle: replacementNo })}
             </p>
             <p className="text-xs text-gray-500 mb-2">
-              From {preview.substitute_from_date}, ticked trip plans run on{" "}
-              {replacementNo} with their own crew until{" "}
-              {row.breakdown_vehicle_detail?.vehicle_no ?? "the vehicle"} is
-              marked repaired. Unticked plans get no trip until then.
+              {t("admin.vehicle_breakdown.verify.plans_hint", {
+                date: preview.substitute_from_date,
+                vehicle: replacementNo,
+                broken: row.breakdown_vehicle_detail?.vehicle_no ?? t("admin.vehicle_breakdown.verify.the_vehicle"),
+              })}
             </p>
             <div className="max-h-56 overflow-y-auto space-y-2 pr-1">
               {preview.plans.map((plan) => (
@@ -829,15 +840,21 @@ function VerifyDialog({
                       key={`${clash.kind}-${clash.trip_plan_id}`}
                       className="ml-6 text-xs text-amber-700"
                     >
-                      ⚠ {replacementNo}{" "}
-                      {clash.kind === "own_plan"
-                        ? "runs its own plan"
-                        : "already stands in for"}{" "}
-                      {clash.display_code ?? clash.trip_plan_id}
-                      {clash.scheduled_time
-                        ? ` at ${clash.scheduled_time.slice(0, 5)}`
-                        : ""}{" "}
-                      on {clash.days.join(", ")}.
+                      ⚠ {t(
+                        clash.kind === "own_plan"
+                          ? clash.scheduled_time
+                            ? "admin.vehicle_breakdown.verify.clash_own_plan_at"
+                            : "admin.vehicle_breakdown.verify.clash_own_plan"
+                          : clash.scheduled_time
+                            ? "admin.vehicle_breakdown.verify.clash_substitution_at"
+                            : "admin.vehicle_breakdown.verify.clash_substitution",
+                        {
+                          vehicle: replacementNo,
+                          plan: clash.display_code ?? clash.trip_plan_id,
+                          time: clash.scheduled_time?.slice(0, 5) ?? "",
+                          days: clash.days.join(", "),
+                        },
+                      )}
                     </p>
                   ))}
                 </div>
@@ -847,22 +864,19 @@ function VerifyDialog({
         )}
 
         <div className="rounded-lg bg-green-50 border border-green-100 p-3 text-xs text-green-800">
-          <strong>On approval:</strong> Trip{" "}
-          <span className="font-mono">{row.trip_assignment_id}</span> will be
-          closed and a new replacement trip will be created with the new
-          vehicle/driver/operator, carrying over the remaining stops. The new
-          trip ID will be shown on the Daily Trip Plan.
+          <strong>{t("admin.vehicle_breakdown.verify.on_approval")}</strong>{" "}
+          {t("admin.vehicle_breakdown.verify.on_approval_text", { trip: row.trip_assignment_id })}
         </div>
         <div>
           <p className="text-sm font-medium text-gray-700 mb-1.5">
-            Remarks (optional)
+            {t("admin.vehicle_breakdown.remarks_optional")}
           </p>
           <InputTextarea
             value={remarks}
             onChange={(e) => setRemarks(e.target.value)}
             rows={2}
             className="w-full text-sm"
-            placeholder="Add approval remarks…"
+            placeholder={t("admin.vehicle_breakdown.verify.remarks_placeholder")}
             autoResize
           />
         </div>
@@ -883,17 +897,18 @@ function RejectDialog({
   onConfirm: (remarks: string) => void;
   isLoading: boolean;
 }) {
+  const { t } = useTranslation();
   const [remarks, setRemarks] = useState("");
   const footer = (
     <div className="flex justify-end gap-2 pt-2">
       <Button
-        label="Cancel"
+        label={t("common.cancel")}
         className="p-button-text p-button-secondary"
         onClick={onClose}
         disabled={isLoading}
       />
       <Button
-        label="Reject"
+        label={t("admin.vehicle_breakdown.reject")}
         icon="pi pi-times"
         className="p-button-danger"
         loading={isLoading}
@@ -909,7 +924,7 @@ function RejectDialog({
       header={
         <div>
           <p className="text-lg font-bold text-gray-800">
-            Reject Breakdown Request
+            {t("admin.vehicle_breakdown.reject_dialog.title")}
           </p>
           <p className="text-xs text-gray-400 font-normal mt-0.5">
             {row.unique_id}
@@ -924,27 +939,21 @@ function RejectDialog({
     >
       <div className="flex flex-col gap-4 pt-2">
         <p className="text-sm text-gray-600">
-          The original vehicle{" "}
-          <strong className="text-red-600">
-            {row.breakdown_vehicle_detail?.vehicle_no ??
-              row.breakdown_vehicle_id}
-          </strong>{" "}
-          will remain assigned to trip{" "}
-          <strong className="font-mono text-blue-700">
-            {row.trip_assignment_id}
-          </strong>
-          .
+          {t("admin.vehicle_breakdown.reject_dialog.text", {
+            vehicle: row.breakdown_vehicle_detail?.vehicle_no ?? row.breakdown_vehicle_id,
+            trip: row.trip_assignment_id,
+          })}
         </p>
         <div>
           <p className="text-sm font-medium text-gray-700 mb-1.5">
-            Rejection Reason <span className="text-red-500">*</span>
+            {t("admin.vehicle_breakdown.reject_dialog.reason")} <span className="text-red-500">*</span>
           </p>
           <InputTextarea
             value={remarks}
             onChange={(e) => setRemarks(e.target.value)}
             rows={3}
             className="w-full text-sm"
-            placeholder="Provide a reason for rejection…"
+            placeholder={t("admin.vehicle_breakdown.reject_dialog.placeholder")}
             autoResize
           />
         </div>
@@ -965,17 +974,18 @@ function MarkRepairedDialog({
   onConfirm: (remarks: string) => void;
   isLoading: boolean;
 }) {
+  const { t } = useTranslation();
   const [remarks, setRemarks] = useState("");
   const footer = (
     <div className="flex justify-end gap-2 pt-2">
       <Button
-        label="Cancel"
+        label={t("common.cancel")}
         className="p-button-text p-button-secondary"
         onClick={onClose}
         disabled={isLoading}
       />
       <Button
-        label="Mark Repaired"
+        label={t("admin.vehicle_breakdown.repair.button")}
         icon="pi pi-wrench"
         className="p-button-success"
         loading={isLoading}
@@ -989,7 +999,7 @@ function MarkRepairedDialog({
       onHide={onClose}
       header={
         <div>
-          <p className="text-lg font-bold text-gray-800">Mark Vehicle Repaired</p>
+          <p className="text-lg font-bold text-gray-800">{t("admin.vehicle_breakdown.repair.title")}</p>
           <p className="text-xs text-gray-400 font-normal mt-0.5">
             {row.unique_id}
           </p>
@@ -1003,24 +1013,20 @@ function MarkRepairedDialog({
     >
       <div className="flex flex-col gap-4 pt-2">
         <p className="text-sm text-gray-600">
-          Vehicle{" "}
-          <strong className="text-green-700">
-            {row.breakdown_vehicle_detail?.vehicle_no ??
-              row.breakdown_vehicle_id}
-          </strong>{" "}
-          will move from Breakdown back to Active and can be assigned to trips
-          again.
+          {t("admin.vehicle_breakdown.repair.text", {
+            vehicle: row.breakdown_vehicle_detail?.vehicle_no ?? row.breakdown_vehicle_id,
+          })}
         </p>
         <div>
           <p className="text-sm font-medium text-gray-700 mb-1.5">
-            Repair Remarks
+            {t("admin.vehicle_breakdown.repair.remarks")}
           </p>
           <InputTextarea
             value={remarks}
             onChange={(e) => setRemarks(e.target.value)}
             rows={3}
             className="w-full text-sm"
-            placeholder="What was repaired…"
+            placeholder={t("admin.vehicle_breakdown.repair.placeholder")}
             autoResize
           />
         </div>
@@ -1179,15 +1185,14 @@ export default function VehicleBreakdownList() {
       r.replacement_vehicle_detail?.vehicle_no ?? r.replacement_vehicle_id,
     _repl_driver: r.replacement_driver_detail?.name ?? "",
     _repl_operator: r.replacement_operator_detail?.name ?? "",
-    _breakdown_reason:
-      BREAKDOWN_REASON_LABELS[r.breakdown_reason] ?? r.breakdown_reason,
+    _breakdown_reason: breakdownReasonLabel(t, r.breakdown_reason),
   }));
 
   /* ── Delete ─────────────────────────────────────────────────────── */
   const handleDelete = async (row: VehicleBreakdownRecord) => {
     const reason = await confirmDeleteWithReason({
       title: t("common.are_you_sure"),
-      text: `Delete breakdown record ${row.unique_id}?`,
+      text: t("admin.vehicle_breakdown.delete_confirm", { id: row.unique_id }),
       confirmButtonText: t("common.delete"),
     });
     if (reason === null) return;
@@ -1245,12 +1250,12 @@ export default function VehicleBreakdownList() {
       );
       setVerifyTarget(null);
       const summary = data?.new_assignment_id
-        ? `Replacement trip ${data.new_assignment_id} created.`
-        : "Replacement vehicle assigned to the trip.";
+        ? t("admin.vehicle_breakdown.verify_result.trip_created", { id: data.new_assignment_id })
+        : t("admin.vehicle_breakdown.verify_result.vehicle_assigned");
       const movedCount = data?.moved_assignment_ids?.length ?? 0;
       const substitutedCount = data?.substituted_plan_ids?.length ?? 0;
       const upcomingDays = substitutedCount
-        ? ` ${substitutedCount} trip plan(s) will run on the replacement vehicle until the repair.`
+        ? ` ${t("admin.vehicle_breakdown.verify_result.plans_substituted", { count: substitutedCount })}`
         : "";
       const skipped: { trip_id: string; reason: string }[] =
         data?.skipped_moves ?? [];
@@ -1258,23 +1263,23 @@ export default function VehicleBreakdownList() {
         // Needs reading — no auto-close.
         Swal.fire({
           icon: "warning",
-          title: "Approved — some trips were not moved",
+          title: t("admin.vehicle_breakdown.verify_result.partial_title"),
           text: [
             summary,
-            `${movedCount} other trip(s) moved to the replacement vehicle.${upcomingDays}`,
+            `${t("admin.vehicle_breakdown.verify_result.trips_moved", { count: movedCount })}${upcomingDays}`,
             "",
             ...skipped.map((s) => `${s.trip_id}: ${s.reason}`),
             "",
-            "Move these from the Daily Trip list.",
+            t("admin.vehicle_breakdown.verify_result.move_manually"),
           ].join("\n"),
         });
       } else {
         Swal.fire({
           icon: "success",
-          title: "Approved",
+          title: t("admin.vehicle_breakdown.approval.APPROVED"),
           text:
             (movedCount
-              ? `${summary} ${movedCount} other trip(s) moved to the replacement vehicle.`
+              ? `${summary} ${t("admin.vehicle_breakdown.verify_result.trips_moved", { count: movedCount })}`
               : summary) + upcomingDays,
           timer: 2500,
           showConfirmButton: false,
@@ -1306,8 +1311,8 @@ export default function VehicleBreakdownList() {
       setRejectTarget(null);
       Swal.fire({
         icon: "info",
-        title: "Rejected",
-        text: "Breakdown request has been rejected.",
+        title: t("admin.vehicle_breakdown.approval.REJECTED"),
+        text: t("admin.vehicle_breakdown.reject_dialog.success"),
         timer: 2000,
         showConfirmButton: false,
       });
@@ -1335,8 +1340,8 @@ export default function VehicleBreakdownList() {
       setRepairTarget(null);
       Swal.fire({
         icon: "success",
-        title: "Repaired",
-        text: "Vehicle is back to Active.",
+        title: t("admin.vehicle_breakdown.repaired"),
+        text: t("admin.vehicle_breakdown.repair.success"),
         timer: 2000,
         showConfirmButton: false,
       });
@@ -1367,17 +1372,17 @@ export default function VehicleBreakdownList() {
 
     const response = await vehicleBreakdownApi.readAllForExport({ params });
     return toRecordList(response).map((r) => ({
-      "Trip Date": r.trip_assignment_detail?.trip_date ?? "",
-      Panchayat: r.trip_assignment_detail?.panchayat_name ?? "",
-      "Broken Vehicle":
+      [t("admin.vehicle_breakdown.trip_date")]: r.trip_assignment_detail?.trip_date ?? "",
+      [t("common.panchayat")]: r.trip_assignment_detail?.panchayat_name ?? "",
+      [t("admin.vehicle_breakdown.broken_vehicle")]:
         r.breakdown_vehicle_detail?.vehicle_no ?? r.breakdown_vehicle_id,
-      "Replacement Vehicle":
+      [t("admin.vehicle_breakdown.replacement_vehicle")]:
         r.replacement_vehicle_detail?.vehicle_no ?? r.replacement_vehicle_id,
-      "Repl. Driver": r.replacement_driver_detail?.name ?? "",
-      "Repl. Operator": r.replacement_operator_detail?.name ?? "",
-      Reason: BREAKDOWN_REASON_LABELS[r.breakdown_reason] ?? r.breakdown_reason,
-      Status: r.status,
-      Approval: r.approval_status,
+      [t("admin.vehicle_breakdown.repl_driver")]: r.replacement_driver_detail?.name ?? "",
+      [t("admin.vehicle_breakdown.repl_operator")]: r.replacement_operator_detail?.name ?? "",
+      [t("admin.vehicle_breakdown.reason")]: breakdownReasonLabel(t, r.breakdown_reason),
+      [t("common.status")]: statusLabel(t, r.status),
+      [t("admin.vehicle_breakdown.approval_label")]: approvalLabel(t, r.approval_status),
     }));
   };
 
@@ -1387,7 +1392,7 @@ export default function VehicleBreakdownList() {
     const extraActions: ActionMenuItem[] = [
       {
         key: "view",
-        label: "View Changes",
+        label: t("admin.vehicle_breakdown.actions.view_changes"),
         icon: <i className="pi pi-eye" />,
         onClick: () => setViewTarget(row),
       },
@@ -1397,13 +1402,13 @@ export default function VehicleBreakdownList() {
       extraActions.push(
         {
           key: "verify",
-          label: "Verify & Approve",
+          label: t("admin.vehicle_breakdown.actions.verify"),
           icon: <i className="pi pi-check-circle" />,
           onClick: () => setVerifyTarget(row),
         },
         {
           key: "reject",
-          label: "Reject",
+          label: t("admin.vehicle_breakdown.reject"),
           icon: <i className="pi pi-times-circle" />,
           onClick: () => setRejectTarget(row),
         },
@@ -1413,7 +1418,7 @@ export default function VehicleBreakdownList() {
     if (row.approval_status === "APPROVED" && !row.repaired_at && canEdit) {
       extraActions.push({
         key: "mark-repaired",
-        label: "Mark Vehicle Repaired",
+        label: t("admin.vehicle_breakdown.repair.title"),
         icon: <i className="pi pi-wrench" />,
         onClick: () => setRepairTarget(row),
       });
@@ -1438,7 +1443,7 @@ export default function VehicleBreakdownList() {
           }
           deleteDisabledReason={
             row.approval_status === "APPROVED"
-              ? "Approved records cannot be deleted"
+              ? t("admin.vehicle_breakdown.cannot_delete_approved")
               : undefined
           }
         />
@@ -1451,7 +1456,7 @@ export default function VehicleBreakdownList() {
     <FilterBar
       searchValue={globalFilterValue}
       onSearchChange={onGlobalFilterChange}
-      searchPlaceholder="Search breakdowns…"
+      searchPlaceholder={t("admin.vehicle_breakdown.search_placeholder")}
     />
   );
 
@@ -1464,16 +1469,16 @@ export default function VehicleBreakdownList() {
       <div className="mb-6 flex min-w-0 flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <h1 className="text-2xl font-semibold text-gray-800">
-            Vehicle Breakdown
+            {t("admin.vehicle_breakdown.title")}
           </h1>
           <p className="text-sm text-gray-500">
-            Report breakdowns and arrange replacement vehicles for trips
+            {t("admin.vehicle_breakdown.subtitle")}
           </p>
         </div>
         <div className="flex flex-shrink-0 flex-wrap items-center gap-2">
           {canAdd && (
             <Button
-              label="Report Breakdown"
+              label={t("admin.vehicle_breakdown.report_breakdown")}
               icon="pi pi-plus"
               className="p-button-success p-button-sm"
               onClick={() => navigate(newPath, { state: selectedContext })}
@@ -1504,7 +1509,7 @@ export default function VehicleBreakdownList() {
         showGridlines
         fitWidth
         className="p-datatable-sm"
-        emptyMessage="No breakdown records found."
+        emptyMessage={t("admin.vehicle_breakdown.empty")}
       >
         <Column
           header={t("common.s_no")}
@@ -1513,17 +1518,17 @@ export default function VehicleBreakdownList() {
         />
         <Column
           field="unique_id"
-          header="Breakdown"
+          header={t("admin.vehicle_breakdown.breakdown")}
           style={{ width: "19%" }}
           body={(r: any) => (
             <StackCell
               primary={r.unique_id}
               lines={[
-                { label: "Trip", value: r.trip_assignment_id },
+                { label: t("admin.vehicle_breakdown.trip"), value: r.trip_assignment_id },
                 { icon: "pi-calendar", value: r._trip_date },
                 r.new_assignment_id
                   ? {
-                      label: "New Trip",
+                      label: t("admin.vehicle_breakdown.new_trip"),
                       value: (
                         <span className="font-mono text-green-700">
                           {r.new_assignment_id}
@@ -1536,45 +1541,45 @@ export default function VehicleBreakdownList() {
           )}
         />
         {locationColumn<(typeof rows)[number]>({
-          header: "Location",
+          header: t("common.location"),
           style: { width: "14%" },
-          levels: [{ label: "Panchayat", value: (r) => r._panchayat }],
+          levels: [{ label: t("common.panchayat"), value: (r) => r._panchayat }],
         })}
         <Column
           field="_breakdown_vehicle"
-          header="Vehicle & Crew"
+          header={t("admin.vehicle_breakdown.vehicle_crew")}
           style={{ width: "21%" }}
           body={(r: any) => (
             <StackCell
               primary={
-                <span className="text-red-700" title="Broken Vehicle">
+                <span className="text-red-700" title={t("admin.vehicle_breakdown.broken_vehicle")}>
                   {r._breakdown_vehicle}
                 </span>
               }
               lines={[
                 {
-                  label: "Replacement",
+                  label: t("admin.vehicle_breakdown.replacement"),
                   value: r._replacement_vehicle && (
                     <span className="font-semibold text-green-700">
                       {r._replacement_vehicle}
                     </span>
                   ),
                 },
-                { label: "Repl. Driver", value: r._repl_driver },
-                { label: "Repl. Operator", value: r._repl_operator },
+                { label: t("admin.vehicle_breakdown.repl_driver"), value: r._repl_driver },
+                { label: t("admin.vehicle_breakdown.repl_operator"), value: r._repl_operator },
               ]}
             />
           )}
         />
         <Column
           field="_breakdown_reason"
-          header="Reason"
+          header={t("admin.vehicle_breakdown.reason")}
           style={{ width: "18%" }}
           body={(r: any) => r._breakdown_reason}
         />
         <Column
           field="status"
-          header="Status"
+          header={t("common.status")}
           sortable
           style={{ width: "17%" }}
           body={(r: VehicleBreakdownRecord) => (
@@ -1583,11 +1588,11 @@ export default function VehicleBreakdownList() {
               <ApprovalBadge value={r.approval_status} />
               {r.status === "REJECTED" ? null : r.repaired_at ? (
                 <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">
-                  Repaired
+                  {t("admin.vehicle_breakdown.repaired")}
                 </span>
               ) : (
                 <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800">
-                  Under Breakdown
+                  {t("admin.vehicle_breakdown.under_breakdown")}
                 </span>
               )}
             </div>

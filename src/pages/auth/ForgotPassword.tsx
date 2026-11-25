@@ -1,5 +1,6 @@
 import { useState, useRef, type ChangeEvent, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { api } from "@/api";
 import { Lock, Mail, User, Leaf, AlertCircle } from "lucide-react";
 import ZigmaLogo from "../../images/logo.png";
@@ -15,6 +16,7 @@ export default function ForgotPassword() {
   const [shake, setShake] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+  const { t } = useTranslation();
 
   const triggerShake = () => {
     setShake(false);
@@ -26,7 +28,7 @@ export default function ForgotPassword() {
     setError("");
 
     if (!username.trim() || !email.trim()) {
-      setError("Please enter both username and email address.");
+      setError(t("login.forgot.enter_both"));
       triggerShake();
       return;
     }
@@ -37,7 +39,7 @@ export default function ForgotPassword() {
       const sessionToken: string | undefined = res.data?.session_token;
       if (!sessionToken) {
         // Username/email combination not found — show generic message without revealing which
-        setError("No account found matching the provided username and email address.");
+        setError(t("login.forgot.no_account"));
         triggerShake();
         return;
       }
@@ -47,7 +49,7 @@ export default function ForgotPassword() {
     } catch (err: any) {
       setError(
         err?.response?.data?.message ||
-          "Something went wrong. Please try again."
+          t("login.something_went_wrong")
       );
       triggerShake();
     } finally {
@@ -61,11 +63,11 @@ export default function ForgotPassword() {
 
       <main className="page">
         <section className="left">
-          <a className="brand" href="#" aria-label="Zigma home" onClick={(e) => e.preventDefault()}>
+          <a className="brand" href="#" aria-label={t("login.brand_home")} onClick={(e) => e.preventDefault()}>
             <img src={ZigmaLogo} alt="Zigma IWMS" width={96} height={90} fetchPriority="high" />
           </a>
 
-          <h1 className="headline">Smart Solutions for a Cleaner, Greener Tomorrow</h1>
+          <h1 className="headline">{t("login.headline")}</h1>
 
           <LoginFeatureChain containerRef={containerRef} />
         </section>
@@ -78,15 +80,15 @@ export default function ForgotPassword() {
             </div>
 
             <h2 className="welcome">
-              Forgot <em>Password</em>
+              {t("login.forgot.title_lead")} <em>{t("login.forgot.title_accent")}</em>
             </h2>
             <p className="subtitle">
-              Enter your username and registered email address. We'll send you an OTP to reset your password.
+              {t("login.forgot.subtitle")}
             </p>
 
             <form onSubmit={handleSubmit} noValidate>
               <div className="field u">
-                <label htmlFor="username">Username</label>
+                <label htmlFor="username">{t("login.username")}</label>
                 <div className="control">
                   <span className="lead" aria-hidden="true"><User /></span>
                   <input
@@ -94,7 +96,7 @@ export default function ForgotPassword() {
                     name="username"
                     type="text"
                     autoComplete="username"
-                    placeholder="Enter your username"
+                    placeholder={t("login.forgot.username_placeholder")}
                     value={username}
                     onChange={(e: ChangeEvent<HTMLInputElement>) => {
                       setUsername(e.target.value);
@@ -105,7 +107,7 @@ export default function ForgotPassword() {
               </div>
 
               <div className="field p">
-                <label htmlFor="email">Email Address</label>
+                <label htmlFor="email">{t("login.forgot.email_label")}</label>
                 <div className="control">
                   <span className="lead" aria-hidden="true"><Mail /></span>
                   <input
@@ -113,7 +115,7 @@ export default function ForgotPassword() {
                     name="email"
                     type="email"
                     autoComplete="email"
-                    placeholder="Enter your registered email"
+                    placeholder={t("login.forgot.email_placeholder")}
                     value={email}
                     onChange={(e: ChangeEvent<HTMLInputElement>) => {
                       setEmail(e.target.value);
@@ -134,7 +136,7 @@ export default function ForgotPassword() {
                 <svg className="arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M10 17l5-5-5-5" /><path d="M15 12H3" />
                 </svg>
-                <span className="label">Send OTP</span>
+                <span className="label">{t("login.forgot.send_otp")}</span>
                 <svg className="spinner" viewBox="0 0 24 24" aria-hidden="true">
                   <circle cx="12" cy="12" r="9" />
                   <path d="M21 12a9 9 0 0 0-9-9" />
@@ -147,13 +149,13 @@ export default function ForgotPassword() {
                 onClick={() => navigate("/auth")}
                 style={{ textAlign: "center", margin: "18px auto 0", display: "block" }}
               >
-                ← Back to Login
+                ← {t("login.back_to_login")}
               </button>
             </form>
 
             <p className="footnote">
               <Leaf aria-hidden="true" />
-              Together for a Sustainable Future
+              {t("login.footnote")}
             </p>
           </div>
         </section>

@@ -28,12 +28,10 @@ import { FormSelect } from "@/components/common/FormSelect";
 
 // ─── Static options ───────────────────────────────────────────────────────────
 
-const STATUS_OPTIONS: SelectOption[] = [
-  { value: "Scheduled", label: "Scheduled" },
-  { value: "In Progress", label: "In Progress" },
-  { value: "Completed", label: "Completed" },
-  { value: "Cancelled", label: "Cancelled" },
-];
+// Values are sent to the API as-is; labels are translated at render time.
+const STATUS_VALUES = ["Scheduled", "In Progress", "Completed", "Cancelled"];
+const POINT_STATUS_VALUES = ["Pending", "In Progress", "Collected", "Skipped", "Missed"];
+const STOP_STATUS_VALUES = ["Pending", "Collected", "Not Available", "Collect Later"];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -172,6 +170,11 @@ const binLabel = (point: DailyTripCollectionPointInline): string =>
 
 export default function DailyTripAssignmentForm() {
   const { t } = useTranslation();
+  const statusLabel = (value: string) =>
+    t(`admin.daily_trip_assignment.status_labels.${value}`, { defaultValue: value });
+  const STATUS_OPTIONS: SelectOption[] = STATUS_VALUES.map((value) => ({ value, label: statusLabel(value) }));
+  const POINT_STATUS_OPTIONS: SelectOption[] = POINT_STATUS_VALUES.map((value) => ({ value, label: statusLabel(value) }));
+  const STOP_STATUS_OPTIONS: SelectOption[] = STOP_STATUS_VALUES.map((value) => ({ value, label: statusLabel(value) }));
   const navigate = useNavigate();
   const { id } = useParams<{ id?: string }>();
   const location = useLocation();
@@ -265,7 +268,7 @@ export default function DailyTripAssignmentForm() {
       .catch((err) => {
         if (cancelled) return;
         setLoadingRecord(false);
-        Swal.fire({ icon: "error", title: t("common.error"), text: extractError(err) ?? "Failed to load record" });
+        Swal.fire({ icon: "error", title: t("common.error"), text: extractError(err) ?? t("admin.daily_trip_assignment.load_record_failed") });
       });
     return () => { cancelled = true; };
   }, [id, isEdit, applyCompanyProjectFromRecord, t]);
@@ -647,13 +650,13 @@ export default function DailyTripAssignmentForm() {
     ensureOption(
       tripPlan.map((plan) =>
         assignedTripPlanIds.includes(plan.value) && plan.value !== formData.trip_plan_id
-          ? { ...plan, label: `${plan.label} (Assigned)`, disabled: true }
+          ? { ...plan, label: t("admin.daily_trip_assignment.plan_assigned_suffix", { label: plan.label }), disabled: true }
           : plan
       ),
       formData.trip_plan_id,
       recordData?.trip_plan?.display_code
     ),
-    [tripPlan, formData.trip_plan_id, recordData, assignedTripPlanIds]
+    [tripPlan, formData.trip_plan_id, recordData, assignedTripPlanIds, t]
   );
   const resolvedStaffTemplates = useMemo(() =>
     ensureOption(
@@ -865,8 +868,8 @@ export default function DailyTripAssignmentForm() {
   return (
     <div className="p-3">
       <ComponentCard
-        title={isEdit ? "Edit Daily Trip Plan" : "New Daily Trip Plan"}
-        desc="Schedule a daily trip with vehicle, staff, route, and collection points"
+        title={isEdit ? t("admin.daily_trip_assignment.form_title_edit") : t("admin.daily_trip_assignment.form_title_new")}
+        desc={t("admin.daily_trip_assignment.form_desc")}
       >
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
@@ -895,13 +898,13 @@ export default function DailyTripAssignmentForm() {
                 disabled={!companyUniqueId || projects.length === 0}
                 placeholder={companyUniqueId
                     ? t("common.select_item_placeholder", { item: t("admin.nav.project") })
-                    : "Select a company first"}
+                    : t("common.select_company_first")}
               />
             </div>
 
             {/* Trip Date */}
             <div>
-              <Label>Trip Date <span className="text-red-500">*</span></Label>
+              <Label>{t("admin.daily_trip_assignment.trip_date")} <span className="text-red-500">*</span></Label>
               <Input
                 type="date"
                 value={formData.trip_date}
@@ -914,7 +917,7 @@ export default function DailyTripAssignmentForm() {
 
             {/* Start Time */}
             <div>
-              <Label>Start Time <span className="text-red-500">*</span></Label>
+              <Label>{t("admin.daily_trip_assignment.start_time")} <span className="text-red-500">*</span></Label>
               <Input
                 type="time"
                 value={formData.scheduled_time}
@@ -927,12 +930,12 @@ export default function DailyTripAssignmentForm() {
 
             {/* Trip Plan */}
             <div>
-              <Label>Trip Plan <span className="text-red-500">*</span></Label>
+              <Label>{t("admin.daily_trip_assignment.trip_plan")} <span className="text-red-500">*</span></Label>
               <Select
                 value={formData.trip_plan_id}
                 onChange={handleTripPlanChange}
                 options={resolvedTripPlan}
-                placeholder="Select trip plan"
+                placeholder={t("admin.daily_trip_assignment.select_trip_plan")}
                 disabled={fetching || !projectId}
               />
               <FieldError message={fieldErrors.trip_plan_id} />
@@ -940,12 +943,12 @@ export default function DailyTripAssignmentForm() {
 
             {/* Staff Template */}
             <div>
-              <Label>Staff Template <span className="text-red-500">*</span></Label>
+              <Label>{t("admin.daily_trip_assignment.staff_template")} <span className="text-red-500">*</span></Label>
               <Select
                 value={formData.staff_template_id}
                 onChange={set("staff_template_id")}
                 options={resolvedStaffTemplates}
-                placeholder="Select staff template"
+                placeholder={t("admin.daily_trip_assignment.select_staff_template")}
                 disabled={fetching || !projectId}
               />
               <FieldError message={fieldErrors.staff_template_id} />
@@ -955,14 +958,14 @@ export default function DailyTripAssignmentForm() {
             {altStaffOptions.length > 0 && (
               <div className="md:col-span-2">
                 <Label>
-                  Alternative Staff Template{" "}
-                  <span className="text-xs font-normal text-gray-400">(Optional — auto-resolved from date range if left blank)</span>
+                  {t("admin.daily_trip_assignment.alt_staff_template")}{" "}
+                  <span className="text-xs font-normal text-gray-400">{t("admin.daily_trip_assignment.alt_staff_template_hint")}</span>
                 </Label>
                 <Select
                   value={formData.alt_staff_template_id}
                   onChange={set("alt_staff_template_id")}
                   options={resolvedAltStaffOptions}
-                  placeholder="Select alternative staff template"
+                  placeholder={t("admin.daily_trip_assignment.select_alt_staff_template")}
                   disabled={fetching || !projectId}
                 />
               </div>
@@ -977,8 +980,8 @@ export default function DailyTripAssignmentForm() {
                     : "border-green-300 bg-green-50 text-green-800"
                 }`}>
                   {resolvedAltStaff
-                    ? `Alt staff active: ${resolvedAltStaff.display_code ?? resolvedAltStaff.unique_id}`
-                    : `Base staff template: ${resolvedStaffTemplates.find((s) => s.value === formData.staff_template_id)?.label ?? ""}`}
+                    ? t("admin.daily_trip_assignment.alt_staff_active", { code: resolvedAltStaff.display_code ?? resolvedAltStaff.unique_id })
+                    : t("admin.daily_trip_assignment.base_staff_template", { label: resolvedStaffTemplates.find((s) => s.value === formData.staff_template_id)?.label ?? "" })}
                 </div>
               </div>
             )}
@@ -986,12 +989,12 @@ export default function DailyTripAssignmentForm() {
             {/* Zone — shown when trip plan has a zone (auto-filled, read-only) */}
             {formData.zone_id && (
               <div>
-                <Label>Zone</Label>
+                <Label>{t("common.zone")}</Label>
                 <Select
                   value={formData.zone_id}
                   onChange={handleZoneChange}
                   options={resolvedZones}
-                  placeholder="Select zone"
+                  placeholder={t("common.select_item_placeholder", { item: t("common.zone") })}
                   
                 />
               </div>
@@ -1000,14 +1003,14 @@ export default function DailyTripAssignmentForm() {
             {/* Panchayat — shown when trip plan has a panchayat (auto-filled) */}
             {formData.panchayat_id && (
               <div>
-                <Label>PLB (Participating Local Bodies)</Label>
+                <Label>{t("admin.nav.panchayat")}</Label>
                 <Select
                   value={formData.panchayat_id}
                   onChange={(value) =>
                     setFormData((prev) => ({ ...prev, panchayat_id: value, ward_ids: [] }))
                   }
                   options={resolvedPanchayats}
-                  placeholder="Select PLB"
+                  placeholder={t("admin.daily_trip_assignment.select_plb")}
                   disabled={fetching || !projectId}
                 />
               </div>
@@ -1017,8 +1020,8 @@ export default function DailyTripAssignmentForm() {
             {(formData.zone_id || formData.panchayat_id) && (
               <div>
                 <Label>
-                  Wards <span className="text-red-500">*</span>
-                  <span className="ml-1 text-xs font-normal text-gray-400">(select one or more)</span>
+                  {t("admin.daily_trip_assignment.wards")} <span className="text-red-500">*</span>
+                  <span className="ml-1 text-xs font-normal text-gray-400">{t("admin.daily_trip_assignment.select_one_or_more")}</span>
                 </Label>
                 <MultiSelect
                   value={formData.ward_ids}
@@ -1030,7 +1033,7 @@ export default function DailyTripAssignmentForm() {
                   options={resolvedWards}
                   optionLabel="label"
                   optionValue="value"
-                  placeholder="Select wards"
+                  placeholder={t("admin.daily_trip_assignment.select_wards")}
                   display="chip"
                   className="w-full"
                   disabled={fetching || !projectId}
@@ -1042,8 +1045,8 @@ export default function DailyTripAssignmentForm() {
             {/* Fallback — no trip plan selected yet: let user manually pick Zone or Panchayat */}
             {!formData.trip_plan_id && !formData.zone_id && !formData.panchayat_id && (
               <div>
-                <Label>Zone / PLB <span className="text-red-500">*</span></Label>
-                <p className="mt-1 text-xs text-gray-400">Select a trip plan to auto-fill zone or PLB.</p>
+                <Label>{t("admin.daily_trip_assignment.zone_plb")} <span className="text-red-500">*</span></Label>
+                <p className="mt-1 text-xs text-gray-400">{t("admin.daily_trip_assignment.select_plan_autofill")}</p>
               </div>
             )}
 
@@ -1051,8 +1054,8 @@ export default function DailyTripAssignmentForm() {
             {(hasBinStops || hasHouseholdStops) && (
               <div>
                 <Label>
-                  Waste Types <span className="text-red-500">*</span>
-                  <span className="ml-1 text-xs font-normal text-gray-400">(select one or more)</span>
+                  {t("admin.daily_trip_assignment.waste_types")} <span className="text-red-500">*</span>
+                  <span className="ml-1 text-xs font-normal text-gray-400">{t("admin.daily_trip_assignment.select_one_or_more")}</span>
                 </Label>
                 <MultiSelect
                   value={formData.waste_type_ids}
@@ -1068,7 +1071,7 @@ export default function DailyTripAssignmentForm() {
                   optionLabel="label"
                   optionValue="value"
                   maxSelectedLabels={3}
-                  placeholder="Select waste types"
+                  placeholder={t("admin.daily_trip_assignment.select_waste_types")}
                   disabled={fetching}
                   className="!flex !h-10 !w-full !items-center !rounded-md !border !border-gray-300 !bg-white !px-3 !py-2 !text-sm !shadow-none focus:!ring-2 focus:!ring-blue-500 disabled:!opacity-50"
                   pt={{
@@ -1084,38 +1087,38 @@ export default function DailyTripAssignmentForm() {
             {/* Status — edit only */}
             {isEdit && (
               <div>
-                <Label>Status</Label>
+                <Label>{t("common.status")}</Label>
                 <Select
                   value={formData.status}
                   onChange={set("status")}
                   options={STATUS_OPTIONS}
-                  placeholder="Select status"
+                  placeholder={t("common.select_status")}
                 />
               </div>
             )}
 
             {isEdit && (
               <div>
-                <Label>Actual Start Time</Label>
+                <Label>{t("admin.daily_trip_assignment.actual_start_time")}</Label>
                 <Input value={actualStartTime || "—"} disabled className="bg-gray-50" />
               </div>
             )}
 
             {isEdit && (
               <div>
-                <Label>Actual End Time</Label>
+                <Label>{t("admin.daily_trip_assignment.actual_end_time")}</Label>
                 <Input value={actualEndTime || "—"} disabled className="bg-gray-50" />
               </div>
             )}
 
             {/* Remarks */}
             <div className="md:col-span-2">
-              <Label>Remarks</Label>
+              <Label>{t("admin.daily_trip_assignment.remarks")}</Label>
               <textarea
                 value={formData.remarks}
                 onChange={(e) => set("remarks")(e.target.value)}
                 rows={3}
-                placeholder="Optional remarks..."
+                placeholder={t("admin.daily_trip_assignment.remarks_placeholder")}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
@@ -1131,16 +1134,16 @@ export default function DailyTripAssignmentForm() {
             return (
               <div className="rounded-lg border border-gray-200 bg-white p-4 flex flex-wrap items-center gap-6">
                 <div>
-                  <p className="text-xs text-gray-400 uppercase tracking-wide">Total Weight</p>
-                  <p className="text-xl font-bold text-gray-900">{(binWeight + householdWeight).toFixed(2)} kg</p>
+                  <p className="text-xs text-gray-400 uppercase tracking-wide">{t("admin.daily_trip_assignment.total_weight")}</p>
+                  <p className="text-xl font-bold text-gray-900">{t("admin.daily_trip_assignment.kg_value", { value: (binWeight + householdWeight).toFixed(2) })}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-gray-400 uppercase tracking-wide">Bin Weight</p>
-                  <p className="text-sm font-semibold text-gray-700">{binWeight.toFixed(2)} kg</p>
+                  <p className="text-xs text-gray-400 uppercase tracking-wide">{t("admin.daily_trip_assignment.bin_weight")}</p>
+                  <p className="text-sm font-semibold text-gray-700">{t("admin.daily_trip_assignment.kg_value", { value: binWeight.toFixed(2) })}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-gray-400 uppercase tracking-wide">Household Weight</p>
-                  <p className="text-sm font-semibold text-gray-700">{householdWeight.toFixed(2)} kg</p>
+                  <p className="text-xs text-gray-400 uppercase tracking-wide">{t("admin.daily_trip_assignment.household_weight")}</p>
+                  <p className="text-sm font-semibold text-gray-700">{t("admin.daily_trip_assignment.kg_value", { value: householdWeight.toFixed(2) })}</p>
                 </div>
               </div>
             );
@@ -1149,18 +1152,18 @@ export default function DailyTripAssignmentForm() {
           <div className="rounded-lg border border-gray-200">
             <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
               <div>
-                <h2 className="text-base font-semibold text-gray-800">Daily Trip Collection Points</h2>
+                <h2 className="text-base font-semibold text-gray-800">{t("admin.daily_trip_assignment.collection_points_title")}</h2>
                 <p className="text-xs text-gray-500">
                   {isEdit
-                    ? "Generated from the selected TripPlan and saved with this daily trip plan."
-                    : "Collection points will be generated from the selected TripPlan after saving."}
+                    ? t("admin.daily_trip_assignment.collection_points_desc_edit")
+                    : t("admin.daily_trip_assignment.collection_points_desc_new")}
                 </p>
               </div>
               {(visibleCollectionPoints.length > 0 || (!isEdit && formData.trip_plan_id)) && (
                 <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700">
                   {collectionPoints.length > 0
-                    ? `${visibleCollectionPoints.length} points`
-                    : `${(tripPlanRecords.find(p => (p.unique_id ?? p.id) === formData.trip_plan_id)?.plan_collection_points ?? []).filter((s: any) => s.collection_type === "bin_collection" && s.bin_id).length} points (preview)`}
+                    ? t("admin.daily_trip_assignment.points_count", { count: visibleCollectionPoints.length })
+                    : t("admin.daily_trip_assignment.points_count_preview", { count: (tripPlanRecords.find(p => (p.unique_id ?? p.id) === formData.trip_plan_id)?.plan_collection_points ?? []).filter((s: any) => s.collection_type === "bin_collection" && s.bin_id).length })}
                 </span>
               )}
             </div>
@@ -1177,11 +1180,11 @@ export default function DailyTripAssignmentForm() {
                       <table className="min-w-full divide-y divide-gray-200 text-sm">
                         <thead className="bg-gray-50 text-left text-xs font-semibold uppercase text-gray-500">
                           <tr>
-                            <th className="px-4 py-3">Seq</th>
-                            <th className="px-4 py-3">Collection Point</th>
-                            <th className="px-4 py-3">Bin</th>
-                            <th className="px-4 py-3">Waste Type</th>
-                            <th className="px-4 py-3">Status</th>
+                            <th className="px-4 py-3">{t("admin.daily_trip_assignment.seq")}</th>
+                            <th className="px-4 py-3">{t("admin.daily_trip_assignment.collection_point")}</th>
+                            <th className="px-4 py-3">{t("admin.daily_trip_assignment.bin")}</th>
+                            <th className="px-4 py-3">{t("common.waste_type")}</th>
+                            <th className="px-4 py-3">{t("common.status")}</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100 bg-white">
@@ -1192,23 +1195,23 @@ export default function DailyTripAssignmentForm() {
                               <td className="px-4 py-3">{stop.bin?.bin_name ?? stop.bin_id ?? "—"}</td>
                               <td className="px-4 py-3">{binWasteTypeName(stop.bin)}</td>
                               <td className="px-4 py-3">
-                                <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800">Pending</span>
+                                <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800">{statusLabel("Pending")}</span>
                               </td>
                             </tr>
                           ))}
                         </tbody>
                       </table>
-                      <p className="px-4 py-2 text-xs text-gray-400 italic">These collection points will be created when you save.</p>
+                      <p className="px-4 py-2 text-xs text-gray-400 italic">{t("admin.daily_trip_assignment.points_created_on_save")}</p>
                     </div>
                   );
                 }
                 return (
                   <div className="px-4 py-6 text-sm text-gray-500">
                     {isEdit
-                      ? "No collection points are attached to this daily trip plan."
+                      ? t("admin.daily_trip_assignment.no_points_attached")
                       : formData.trip_plan_id
-                        ? "No bin collection stops found in the selected trip plan."
-                        : "Select a trip plan to preview collection points."}
+                        ? t("admin.daily_trip_assignment.no_bin_stops_in_plan")
+                        : t("admin.daily_trip_assignment.select_plan_preview_points")}
                   </div>
                 );
               })()
@@ -1217,13 +1220,13 @@ export default function DailyTripAssignmentForm() {
                 <table className="min-w-full divide-y divide-gray-200 text-sm">
                   <thead className="bg-gray-50 text-left text-xs font-semibold uppercase text-gray-500">
                     <tr>
-                      <th className="px-4 py-3">Seq</th>
-                      <th className="px-4 py-3">Collection Point</th>
-                      <th className="px-4 py-3">Bin</th>
-                      <th className="px-4 py-3">Waste Type</th>
-                      <th className="px-4 py-3">Weight (kg)</th>
-                      <th className="px-4 py-3">Collected</th>
-                      <th className="px-4 py-3">Status</th>
+                      <th className="px-4 py-3">{t("admin.daily_trip_assignment.seq")}</th>
+                      <th className="px-4 py-3">{t("admin.daily_trip_assignment.collection_point")}</th>
+                      <th className="px-4 py-3">{t("admin.daily_trip_assignment.bin")}</th>
+                      <th className="px-4 py-3">{t("common.waste_type")}</th>
+                      <th className="px-4 py-3">{t("admin.daily_trip_assignment.weight_kg")}</th>
+                      <th className="px-4 py-3">{t("common.collected")}</th>
+                      <th className="px-4 py-3">{t("common.status")}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 bg-white">
@@ -1276,7 +1279,7 @@ export default function DailyTripAssignmentForm() {
                           <FormSelect
                             value={point.status ?? "Pending"}
                             onChange={(v) => updatePoint({ status: v, is_collected: v === "Collected" })}
-                            options={[{ value: "Pending", label: "Pending" }, { value: "In Progress", label: "In Progress" }, { value: "Collected", label: "Collected" }, { value: "Skipped", label: "Skipped" }, { value: "Missed", label: "Missed" }]}
+                            options={POINT_STATUS_OPTIONS}
                             placeholder={null}
                           />
                         </td>
@@ -1294,17 +1297,17 @@ export default function DailyTripAssignmentForm() {
             <div className="rounded-lg border border-purple-200">
               <div className="flex items-center justify-between border-b border-purple-200 bg-purple-50 px-4 py-3">
                 <div>
-                  <h2 className="text-base font-semibold text-purple-800">Daily Trip Customer Collection Points</h2>
+                  <h2 className="text-base font-semibold text-purple-800">{t("admin.daily_trip_assignment.customer_points_title")}</h2>
                   <p className="text-xs text-purple-600">
                     {isEdit
-                      ? "Per-customer household or bulk-waste stops generated from the selected Trip Plan."
-                      : "Customer stops will be generated from the selected Trip Plan after saving."}
+                      ? t("admin.daily_trip_assignment.customer_points_desc_edit")
+                      : t("admin.daily_trip_assignment.customer_points_desc_new")}
                   </p>
                 </div>
                 {isEdit ? (
                   householdCollectionPoints.length > 0 && (
                     <span className="rounded-full bg-purple-100 px-3 py-1 text-xs font-semibold text-purple-700">
-                      {householdCollectionPoints.length} stops
+                      {t("admin.daily_trip_assignment.stops_count", { count: householdCollectionPoints.length })}
                     </span>
                   )
                 ) : (() => {
@@ -1314,7 +1317,7 @@ export default function DailyTripAssignmentForm() {
                   ).length;
                   return count > 0 ? (
                     <span className="rounded-full bg-purple-100 px-3 py-1 text-xs font-semibold text-purple-700">
-                      {count} stops (preview)
+                      {t("admin.daily_trip_assignment.stops_count_preview", { count })}
                     </span>
                   ) : null;
                 })()}
@@ -1337,8 +1340,19 @@ export default function DailyTripAssignmentForm() {
                       .filter((stop) => ["household_collection", "bulk_waste_collection"].includes(String(stop.collection_type)))
                       .flatMap((stop) => {
                         const isBulk = stop.collection_type === "bulk_waste_collection";
+                        // Mirror backend TripPlan.apply_qr_scope: household plans keep only
+                        // With QR and/or Without QR customers per the plan's checkboxes.
+                        const isHouseholdPlan = String(plan?.collection_type) === "household_collection";
+                        const includeWithQr = plan?.include_with_qr !== false;
+                        const includeWithoutQr = plan?.include_without_qr !== false;
                         return previewCustomers
                           .filter((customer) => Boolean(customer.is_bulkwaste_generator) === isBulk)
+                          .filter((customer) => customer.is_active !== false)
+                          .filter((customer) => {
+                            if (!isHouseholdPlan) return true;
+                            const isWithoutQr = Boolean(customer.is_without_qr);
+                            return isWithoutQr ? includeWithoutQr : includeWithQr;
+                          })
                           .map((customer, index) => ({
                             ...stop,
                             unique_id: String(stop.unique_id ?? "preview") + "-" + String(customer.unique_id ?? customer.id ?? ""),
@@ -1359,7 +1373,7 @@ export default function DailyTripAssignmentForm() {
                 if (allPreviewStops.length === 0) {
                   return (
                     <div className="px-4 py-6 text-sm text-gray-500">
-                      {formData.trip_plan_id ? "No customer stops found in the selected trip plan." : "Select a trip plan to preview customer stops."}
+                      {formData.trip_plan_id ? t("admin.daily_trip_assignment.no_customer_stops_in_plan") : t("admin.daily_trip_assignment.select_plan_preview_stops")}
                     </div>
                   );
                 }
@@ -1368,10 +1382,10 @@ export default function DailyTripAssignmentForm() {
                     <table className="min-w-full divide-y divide-gray-200 text-sm">
                       <thead className="bg-purple-50 text-left text-xs font-semibold uppercase text-purple-600">
                         <tr>
-                          <th className="px-4 py-3">Seq</th>
-                          <th className="px-4 py-3">Customer</th>
-                          <th className="px-4 py-3">Address</th>
-                          <th className="px-4 py-3">Status</th>
+                          <th className="px-4 py-3">{t("admin.daily_trip_assignment.seq")}</th>
+                          <th className="px-4 py-3">{t("common.customer")}</th>
+                          <th className="px-4 py-3">{t("common.address")}</th>
+                          <th className="px-4 py-3">{t("common.status")}</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100 bg-white">
@@ -1381,35 +1395,35 @@ export default function DailyTripAssignmentForm() {
                             <td className="px-4 py-3">{stop.customer?.customer_name ?? stop.customer_id ?? "—"}</td>
                             <td className="px-4 py-3 text-xs">{[stop.customer?.building_no, stop.customer?.street].filter(Boolean).join(", ") || "—"}</td>
                             <td className="px-4 py-3">
-                              <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800">Pending</span>
+                              <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800">{statusLabel("Pending")}</span>
                             </td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
-                    <p className="px-4 py-2 text-xs italic text-gray-400">These customer stops will be created when you save.</p>
+                    <p className="px-4 py-2 text-xs italic text-gray-400">{t("admin.daily_trip_assignment.stops_created_on_save")}</p>
                   </div>
                 );
               })()}
 
               {isEdit && (
                 householdCollectionPoints.length === 0 ? (
-                  <div className="px-4 py-6 text-sm text-gray-500">No customer collection stops are attached to this daily trip plan.</div>
+                  <div className="px-4 py-6 text-sm text-gray-500">{t("admin.daily_trip_assignment.no_customer_stops_attached")}</div>
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-200 text-sm">
                       <thead className="bg-purple-50 text-left text-xs font-semibold uppercase text-purple-600">
                         <tr>
-                          <th className="px-4 py-3">Seq</th>
-                          <th className="px-4 py-3">Customer</th>
-                          <th className="px-4 py-3">Address</th>
-                          <th className="px-4 py-3">Weight (kg)</th>
-                          <th className="px-4 py-3">Wet (kg)</th>
-                          <th className="px-4 py-3">Dry (kg)</th>
-                          <th className="px-4 py-3">Mixed (kg)</th>
-                          <th className="px-4 py-3">Sanitary (kg)</th>
-                          <th className="px-4 py-3">Collected</th>
-                          <th className="px-4 py-3">Status</th>
+                          <th className="px-4 py-3">{t("admin.daily_trip_assignment.seq")}</th>
+                          <th className="px-4 py-3">{t("common.customer")}</th>
+                          <th className="px-4 py-3">{t("common.address")}</th>
+                          <th className="px-4 py-3">{t("admin.daily_trip_assignment.weight_kg")}</th>
+                          <th className="px-4 py-3">{t("admin.daily_trip_assignment.wet_kg")}</th>
+                          <th className="px-4 py-3">{t("admin.daily_trip_assignment.dry_kg")}</th>
+                          <th className="px-4 py-3">{t("admin.daily_trip_assignment.mixed_kg")}</th>
+                          <th className="px-4 py-3">{t("admin.daily_trip_assignment.sanitary_kg")}</th>
+                          <th className="px-4 py-3">{t("common.collected")}</th>
+                          <th className="px-4 py-3">{t("common.status")}</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100 bg-white">
@@ -1440,12 +1454,7 @@ export default function DailyTripAssignmentForm() {
                                 <FormSelect
                                   value={stop.status ?? "Pending"}
                                   onChange={(v) => updateStop({ status: v, is_collected: v === "Collected" })}
-                                  options={[
-                                    { value: "Pending", label: "Pending" },
-                                    { value: "Collected", label: "Collected" },
-                                    { value: "Not Available", label: "Not Available" },
-                                    { value: "Collect Later", label: "Collect Later" },
-                                  ]}
+                                  options={STOP_STATUS_OPTIONS}
                                   placeholder={null}
                                 />
                               </td>

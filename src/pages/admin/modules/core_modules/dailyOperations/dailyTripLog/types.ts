@@ -11,6 +11,9 @@ export type WasteTypeBreakdownItem = {
 export type TripLogCaptureImage = {
   url: string;
   waste_type_id?: string;
+  /** Label for the photo, e.g. "Wet Waste". */
+  waste_type_name?: string | null;
+  image_type?: string;
   weight?: number | string;
   collection_id?: string;
   waste_collection_id?: string;

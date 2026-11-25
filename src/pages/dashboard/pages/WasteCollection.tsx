@@ -1425,6 +1425,14 @@ export default function WasteCollection() {
     return value;
   };
 
+  // Demo pickup labels are stored as "Today · 05:10 AM" / "Yesterday · 06:20 PM".
+  const formatLastPickup = (value: string) => {
+    const [day, time] = value.split(" · ");
+    if (day === "Today") return t("dashboard.waste_collection.pickup_today", { time });
+    if (day === "Yesterday") return t("dashboard.waste_collection.pickup_yesterday", { time });
+    return value;
+  };
+
   const propertyDescriptor =
     property === "All"
       ? t("dashboard.waste_collection.properties.all_properties")
@@ -1653,7 +1661,7 @@ export default function WasteCollection() {
     const start = (dailyPage - 1) * dailyPageSize;
     return filteredDailyData.slice(start, start + dailyPageSize);
   }, [filteredDailyData, dailyPage, dailyPageSize]);
-  const noDataMessage = t("common.no_items_found", { item: "data" });
+  const noDataMessage = t("common.no_records");
   const monthlyFilteredStats = useMemo(() => {
     if (monthlyFilterMode === "all") return monthlyStats;
     const selected = monthlyStats.filter(
@@ -2431,7 +2439,7 @@ export default function WasteCollection() {
                               {monthlyVehicleSummary.map((row) => (
                                 <TableRow key={row.vehicle} className={tableRowHoverClass}>
                                   <TableCell className="font-semibold">
-                                    {row.vehicle}
+                                    {row.vehicle === "Unknown" ? t("common.unknown") : row.vehicle}
                                   </TableCell>
                                   <TableCell>{row.trips}</TableCell>
                                   <TableCell>{row.wet.toFixed(1)}</TableCell>
@@ -2930,7 +2938,7 @@ export default function WasteCollection() {
                                           isDarkMode ? "text-slate-300" : "text-slate-600"
                                         )}
                                       >
-                                        {record.lastPickup}
+                                        {formatLastPickup(record.lastPickup)}
                                       </TableCell>
                                     </TableRow>
                                   ))}
@@ -3008,7 +3016,7 @@ export default function WasteCollection() {
                         {vehicleSummary.map((row) => (
                           <TableRow key={row.vehicle} className={tableRowHoverClass}>
                             <TableCell className="font-semibold">
-                              {row.vehicle}
+                              {row.vehicle === "Unknown" ? t("common.unknown") : row.vehicle}
                             </TableCell>
                             <TableCell>{row.trips}</TableCell>
                             <TableCell>{row.wet.toFixed(1)}</TableCell>

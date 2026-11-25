@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import Swal from "@/lib/notify";
 import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 
 import { Button } from "primereact/button";
 import { DataTable } from "@/components/common/SafeDataTable";
@@ -121,7 +122,16 @@ const WasteChips = ({ items }: { items?: WasteTypeBreakdownItem[] }) => {
   );
 };
 
+// Name each photo by its waste type ("Wet Waste"), or "Evidence" for a
+// Not Available / Collect Later photo; otherwise fall back to a number.
+const imageLabel = (image: TripLogCaptureImage, index: number, total: number, t: TFunction): string => {
+  if (image.waste_type_name) return String(image.waste_type_name);
+  if (image.image_type === "status_evidence") return t("admin.daily_trip_log.evidence");
+  return total === 1 ? t("admin.daily_trip_log.view_image") : t("admin.daily_trip_log.image_number", { number: index + 1 });
+};
+
 const CollectionImageLinks = ({ images }: { images?: TripLogCaptureImage[] }) => {
+  const { t } = useTranslation();
   const availableImages = (images ?? []).filter((image) => Boolean(image.url));
   if (availableImages.length === 0) {
     return <span className="text-xs text-gray-400">—</span>;
@@ -135,11 +145,11 @@ const CollectionImageLinks = ({ images }: { images?: TripLogCaptureImage[] }) =>
           href={image.url}
           target="_blank"
           rel="noreferrer"
-          title="Open collection image"
+          title={t("admin.daily_trip_log.open_image", { label: imageLabel(image, index, availableImages.length, t) })}
           className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700 transition-colors hover:bg-emerald-100 hover:text-emerald-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
         >
           <i className="pi pi-image text-xs" aria-hidden="true" />
-          {availableImages.length === 1 ? "View image" : `Image ${index + 1}`}
+          {imageLabel(image, index, availableImages.length, t)}
         </a>
       ))}
     </div>
@@ -253,13 +263,20 @@ const COLLECTION_STATUS_STYLES: Record<string, string> = {
   "Completed": "bg-green-100 text-green-700",
 };
 
+const TripStatusText = ({ value }: { value?: string }) => {
+  const { t } = useTranslation();
+  if (!value) return <>-</>;
+  const slug = value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_");
+  return <>{t(`admin.daily_trip_log.status.${slug}`, { defaultValue: value })}</>;
+};
+
 const Badge = ({ value }: { value?: string }) => (
   <span
     className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
       STATUS_STYLES[value ?? ""] ?? "bg-gray-100 text-gray-600"
     }`}
   >
-    {value ?? "-"}
+    <TripStatusText value={value} />
   </span>
 );
 
@@ -269,7 +286,7 @@ const CollectionStatusBadge = ({ value }: { value?: string }) => (
       COLLECTION_STATUS_STYLES[value ?? ""] ?? "bg-gray-100 text-gray-500"
     }`}
   >
-    {value ?? "-"}
+    <TripStatusText value={value} />
   </span>
 );
 
@@ -289,7 +306,7 @@ const StopStatusBadge = ({ value }: { value?: string }) => (
       STOP_STATUS_STYLES[value ?? ""] ?? "bg-gray-100 text-gray-600"
     }`}
   >
-    {value ?? "-"}
+    <TripStatusText value={value} />
   </span>
 );
 
@@ -347,14 +364,14 @@ export default function DailyTripLogReportPage() {
   }, [id, t]);
 
   if (loading) {
-    return <div className="p-6 text-sm text-gray-500">Loading trip report…</div>;
+    return <div className="p-6 text-sm text-gray-500">{t("admin.daily_trip_log.loading_report")}</div>;
   }
 
   if (!row) {
     return (
       <div className="p-3">
-        <p className="text-sm text-gray-500 mb-4">Trip log not found.</p>
-        <Button label="Back to list" icon="pi pi-arrow-left" onClick={() => navigate(listPath)} />
+        <p className="text-sm text-gray-500 mb-4">{t("admin.daily_trip_log.not_found")}</p>
+        <Button label={t("admin.daily_trip_log.back_to_list")} icon="pi pi-arrow-left" onClick={() => navigate(listPath)} />
       </div>
     );
   }
@@ -388,7 +405,7 @@ export default function DailyTripLogReportPage() {
       {/* Header */}
       <div className="mb-6 flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-800">Trip Log Report</h1>
+          <h1 className="text-2xl font-semibold text-gray-800">{t("admin.daily_trip_log.report_title")}</h1>
           <p className="text-sm text-gray-500">{row.unique_id}</p>
         </div>
         <div className="flex items-center gap-2">
@@ -400,47 +417,47 @@ export default function DailyTripLogReportPage() {
       {/* Trip / Location / Staff summary */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-3 mb-6">
         <div className="rounded-xl border p-4">
-          <SectionLabel>Trip Details</SectionLabel>
+          <SectionLabel>{t("admin.daily_trip_log.trip_details")}</SectionLabel>
           <div className="flex flex-col gap-1.5">
-            <InfoRow label="Trip Assignment" value={row.trip_assignment?.display_code ?? row.trip_assignment_id} />
-            <InfoRow label="Date" value={row.trip_date} />
-            <InfoRow label="Collection Status" value={row.collection_status} />
-            <InfoRow label="Waste Type" value={wasteTypeName} />
-            <InfoRow label="Vehicle" value={(row.vehicle as any)?.vehicle_no} />
-            <InfoRow label="Start Time" value={formatTimeOnly(row.actual_start_time)} />
-            <InfoRow label="End Time" value={formatTimeOnly(row.actual_end_time)} />
+            <InfoRow label={t("admin.daily_trip_log.trip_assignment")} value={row.trip_assignment?.display_code ?? row.trip_assignment_id} />
+            <InfoRow label={t("common.date")} value={row.trip_date} />
+            <InfoRow label={t("admin.daily_trip_log.collection_status")} value={row.collection_status} />
+            <InfoRow label={t("common.waste_type")} value={wasteTypeName} />
+            <InfoRow label={t("common.vehicle")} value={(row.vehicle as any)?.vehicle_no} />
+            <InfoRow label={t("admin.daily_trip_log.start_time")} value={formatTimeOnly(row.actual_start_time)} />
+            <InfoRow label={t("admin.daily_trip_log.end_time")} value={formatTimeOnly(row.actual_end_time)} />
           </div>
         </div>
 
         <div className="rounded-xl border p-4">
-          <SectionLabel>Location</SectionLabel>
+          <SectionLabel>{t("common.location")}</SectionLabel>
           <div className="flex flex-col gap-1.5">
-            <InfoRow label="District" value={row.location?.district} />
-            <InfoRow label="City" value={row.location?.city} />
-            <InfoRow label="Panchayat" value={row.panchayat?.panchayat_name ?? row.location?.panchayat} />
-            <InfoRow label="Zone" value={row.zone?.zone_name ?? row.trip_assignment?.zone?.zone_name ?? row.location?.zone} />
-            <InfoRow label="Ward" value={wardNames} />
+            <InfoRow label={t("common.district")} value={row.location?.district} />
+            <InfoRow label={t("common.city")} value={row.location?.city} />
+            <InfoRow label={t("common.panchayat")} value={row.panchayat?.panchayat_name ?? row.location?.panchayat} />
+            <InfoRow label={t("common.zone")} value={row.zone?.zone_name ?? row.trip_assignment?.zone?.zone_name ?? row.location?.zone} />
+            <InfoRow label={t("common.ward")} value={wardNames} />
           </div>
         </div>
 
         <div className="rounded-xl border p-4">
-          <SectionLabel>Staff</SectionLabel>
+          <SectionLabel>{t("admin.daily_trip_log.staff")}</SectionLabel>
           {st?.base ? (
             <div className="flex flex-col gap-1.5">
-              <InfoRow label="Driver" value={st.base.driver?.employee_name} />
-              <InfoRow label="Operator" value={st.base.operator?.employee_name} />
+              <InfoRow label={t("admin.daily_trip_log.driver")} value={st.base.driver?.employee_name} />
+              <InfoRow label={t("admin.daily_trip_log.operator")} value={st.base.operator?.employee_name} />
               {st.alt && (
                 <>
-                  <p className="text-xs text-orange-500 mt-1">Alt: {st.alt.display_code}</p>
-                  <InfoRow label="Driver" value={st.alt.driver?.employee_name} />
-                  <InfoRow label="Operator" value={st.alt.operator?.employee_name} />
+                  <p className="text-xs text-orange-500 mt-1">{t("admin.daily_trip_log.alt_template")}: {st.alt.display_code}</p>
+                  <InfoRow label={t("admin.daily_trip_log.driver")} value={st.alt.driver?.employee_name} />
+                  <InfoRow label={t("admin.daily_trip_log.operator")} value={st.alt.operator?.employee_name} />
                 </>
               )}
             </div>
           ) : (
             <div className="flex flex-col gap-1.5">
-              <InfoRow label="Driver" value={row.driver?.employee_name} />
-              <InfoRow label="Operator" value={row.operator?.employee_name} />
+              <InfoRow label={t("admin.daily_trip_log.driver")} value={row.driver?.employee_name} />
+              <InfoRow label={t("admin.daily_trip_log.operator")} value={row.operator?.employee_name} />
             </div>
           )}
         </div>
@@ -449,12 +466,12 @@ export default function DailyTripLogReportPage() {
       {/* Totals */}
       <div className="rounded-xl border p-4 mb-6 flex flex-wrap items-center gap-6">
         <div>
-          <p className="text-xs text-gray-400 uppercase tracking-wide">Overall Total</p>
+          <p className="text-xs text-gray-400 uppercase tracking-wide">{t("admin.daily_trip_log.total_weight")}</p>
           <p className="text-xl font-bold text-gray-900">{overallTotal.toFixed(2)} kg</p>
         </div>
         {wasteTypeBreakdown.length > 0 && (
           <div>
-            <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Total by Waste Type</p>
+            <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">{t("admin.daily_trip_log.waste_breakdown")}</p>
             <WasteChips items={wasteTypeBreakdown} />
           </div>
         )}
@@ -464,9 +481,9 @@ export default function DailyTripLogReportPage() {
       {isHousehold ? (
         <div className="mb-6">
           <SectionLabel>
-            Household Collections
+            {t("admin.daily_trip_log.household_collections")}
             <span className="ml-1 normal-case font-normal text-gray-400">
-              — {hhCollections.filter((hh) => hh.is_collected).length} / {hhCollections.length} collected
+              — {t("admin.daily_trip_log.collected_of_total", { collected: hhCollections.filter((hh) => hh.is_collected).length, total: hhCollections.length })}
             </span>
           </SectionLabel>
           <DataTable
@@ -482,22 +499,22 @@ export default function DailyTripLogReportPage() {
           >
             <Column field="sequence" header="#" style={{ width: "5%" }} />
             <Column
-              header="Customer"
+              header={t("common.customer")}
               style={{ width: "25%" }}
               body={(hh: any) => hh.customer_name ?? hh.customer_unique_id ?? "-"}
             />
             <Column
-              header="Waste Type Breakdown"
+              header={t("admin.daily_trip_log.waste_breakdown")}
               style={{ width: "35%" }}
               body={(hh: any) => <WasteChips items={hh.waste_type_breakdown} />}
             />
             <Column
-              header="Collection Time"
+              header={t("admin.daily_trip_log.export.collection_time")}
               style={{ width: "13%" }}
               body={(hh: any) => formatCollectionTime(hh.collected_at)}
             />
             <Column
-              header="Image"
+              header={t("admin.daily_trip_log.image")}
               style={{ width: "11%" }}
               body={(hh: any) => (
                 <CollectionImageLinks
@@ -506,7 +523,7 @@ export default function DailyTripLogReportPage() {
               )}
             />
             <Column
-              header="Status"
+              header={t("common.status")}
               style={{ width: "11%" }}
               body={(hh: any) => <StopStatusBadge value={hh.status} />}
             />
@@ -515,10 +532,10 @@ export default function DailyTripLogReportPage() {
       ) : (
         <div className="mb-6">
           <SectionLabel>
-            Collection Points
+            {t("admin.daily_trip_log.collection_points")}
             {cps.length > 0 && (
               <span className="ml-1 normal-case font-normal text-gray-400">
-                — {cps.filter((cp) => cp.is_collected).length} / {cps.length} collected
+                — {t("admin.daily_trip_log.collected_of_total", { collected: cps.filter((cp) => cp.is_collected).length, total: cps.length })}
               </span>
             )}
           </SectionLabel>
@@ -529,7 +546,7 @@ export default function DailyTripLogReportPage() {
             fitWidth
             localData
             exportable={false}
-            emptyMessage="No collection points."
+            emptyMessage={t("admin.daily_trip_log.no_collection_points")}
             paginator
             rows={10}
             rowsPerPageOptions={[10, 25, 50]}
@@ -537,16 +554,16 @@ export default function DailyTripLogReportPage() {
             <Column field="sequence" header="#" style={{ width: "5%" }} />
             <Column
               field="cp_name"
-              header="Collection Point"
+              header={t("admin.daily_trip_log.export.point_type_collection_point")}
               style={{ width: "32%" }}
             />
             <Column
-              header="Waste Type Breakdown"
+              header={t("admin.daily_trip_log.waste_breakdown")}
               style={{ width: "38%" }}
               body={(cp: any) => <WasteChips items={cp.waste_type_breakdown} />}
             />
             <Column
-              header="Image"
+              header={t("admin.daily_trip_log.image")}
               style={{ width: "12%" }}
               body={(cp: any) => (
                 <CollectionImageLinks
@@ -555,7 +572,7 @@ export default function DailyTripLogReportPage() {
               )}
             />
             <Column
-              header="Status"
+              header={t("common.status")}
               style={{ width: "13%" }}
               body={(cp: any) => <StopStatusBadge value={cp.status} />}
             />
@@ -565,7 +582,7 @@ export default function DailyTripLogReportPage() {
 
       <div className="mt-6">
         <Button
-          label="Back to list"
+          label={t("admin.daily_trip_log.back_to_list")}
           icon="pi pi-arrow-left"
           className="p-button-outlined p-button-sm"
           onClick={() => navigate(listPath)}

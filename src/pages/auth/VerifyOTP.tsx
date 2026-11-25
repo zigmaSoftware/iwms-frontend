@@ -1,5 +1,6 @@
 import { useState, useRef, type FormEvent, type KeyboardEvent, type ClipboardEvent } from "react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { api } from "@/api";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -11,6 +12,7 @@ const OTP_LENGTH = 4;
 
 export default function VerifyOTP() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const location = useLocation();
   const state = location.state as { sessionToken?: string; email?: string; username?: string } | null;
 
@@ -63,11 +65,11 @@ export default function VerifyOTP() {
     setInfo("");
 
     if (otp.length < OTP_LENGTH) {
-      setError(`Please enter all ${OTP_LENGTH} digits.`);
+      setError(t("login.otp.enter_all_digits", { count: OTP_LENGTH }));
       return;
     }
     if (!sessionToken) {
-      setError("Invalid session. Please go back and request a new OTP.");
+      setError(t("login.otp.invalid_session"));
       return;
     }
 
@@ -80,7 +82,7 @@ export default function VerifyOTP() {
       const resetToken: string = res.data?.reset_token;
       navigate("/auth/reset-password", { state: { resetToken } });
     } catch (err: any) {
-      setError(err?.response?.data?.message || "OTP verification failed.");
+      setError(err?.response?.data?.message || t("login.otp.verification_failed"));
       setDigits(Array(OTP_LENGTH).fill(""));
       inputRefs.current[0]?.focus();
     } finally {
@@ -90,7 +92,7 @@ export default function VerifyOTP() {
 
   const handleResend = async () => {
     if (!state?.username || !state?.email) {
-      setError("Session expired. Please go back and try again.");
+      setError(t("login.otp.session_expired"));
       return;
     }
     setResending(true);
@@ -106,10 +108,10 @@ export default function VerifyOTP() {
         replace: true,
         state: { sessionToken: newSessionToken, email: state.email, username: state.username },
       });
-      setInfo("A new OTP has been sent to your email.");
+      setInfo(t("login.otp.resent"));
       setDigits(Array(OTP_LENGTH).fill(""));
     } catch (err: any) {
-      setError(err?.response?.data?.message || "Could not resend OTP. Please wait before trying again.");
+      setError(err?.response?.data?.message || t("login.otp.resend_failed"));
     } finally {
       setResending(false);
     }
@@ -137,11 +139,11 @@ export default function VerifyOTP() {
             </div>
 
             <CardTitle className="text-2xl font-bold tracking-tight text-gray-900">
-              Verify OTP
+              {t("login.otp.title")}
             </CardTitle>
             <CardDescription className="text-sm text-gray-500 mt-1 leading-relaxed">
-              Enter the {OTP_LENGTH}-digit OTP sent to{" "}
-              {maskedEmail ? <strong>{maskedEmail}</strong> : "your registered email"}.
+              {t("login.otp.subtitle_prefix", { count: OTP_LENGTH })}{" "}
+              {maskedEmail ? <strong>{maskedEmail}</strong> : t("login.otp.your_registered_email")}.
             </CardDescription>
           </CardHeader>
 
@@ -187,10 +189,10 @@ export default function VerifyOTP() {
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z" />
                     </svg>
-                    Verifying…
+                    {t("login.otp.verifying")}
                   </>
                 ) : (
-                  "Verify OTP"
+                  t("login.otp.verify")
                 )}
               </Button>
 
@@ -200,7 +202,7 @@ export default function VerifyOTP() {
                   className="inline-flex items-center gap-1.5 font-semibold text-green-600 hover:underline"
                 >
                   <ArrowLeft size={14} />
-                  Back
+                  {t("login.back")}
                 </Link>
                 <button
                   type="button"
@@ -208,7 +210,7 @@ export default function VerifyOTP() {
                   disabled={resending}
                   className="font-semibold text-orange-500 hover:underline disabled:opacity-50"
                 >
-                  {resending ? "Resending…" : "Resend OTP"}
+                  {resending ? t("login.otp.resending") : t("login.otp.resend")}
                 </button>
               </div>
             </form>
