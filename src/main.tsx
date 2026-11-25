@@ -8,12 +8,12 @@ import "primereact/resources/themes/lara-light-cyan/theme.css";
 import "primereact/resources/primereact.min.css";
 import "primeicons/primeicons.css";
 import "./index.css";
-import "./i18n";
+import { i18nReady } from "./i18n";
 import { restoreAuthSession } from "./utils/authStorage";
 
 // Signed-in user data lives only in memory, so rebuild it from the auth
 // cookie before the first render — every reader of it is synchronous.
-void restoreAuthSession().finally(() => {
+void Promise.all([restoreAuthSession(), i18nReady]).finally(() => {
   ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     <AppProviders>
       <App />

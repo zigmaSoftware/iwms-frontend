@@ -57,7 +57,7 @@ export default function Auth() {
 
   const [userInvalid, setUserInvalid] = useState(false);
   const [passInvalid, setPassInvalid] = useState(false);
-  const [passHint, setPassHint] = useState("Enter your password to continue.");
+  const [passHint, setPassHint] = useState("");
   const [shake, setShake] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -71,7 +71,7 @@ export default function Auth() {
   useEffect(() => {
     const sessionMessage = (location.state as { sessionMessage?: string } | null)?.sessionMessage;
     if (sessionMessage) {
-      toast({ title: "Session Ended", description: sessionMessage });
+      toast({ title: t("login.session_ended"), description: sessionMessage });
       window.history.replaceState({}, "");
     }
   }, []);
@@ -80,7 +80,7 @@ export default function Auth() {
   useEffect(() => {
     const successMessage = (location.state as { successMessage?: string } | null)?.successMessage;
     if (successMessage) {
-      toast({ title: "Password Reset", description: successMessage });
+      toast({ title: t("login.password_reset_title"), description: successMessage });
       window.history.replaceState({}, "");
     }
   }, []);
@@ -103,7 +103,7 @@ export default function Auth() {
     if (!trimmedUsername || !password) {
       if (!trimmedUsername) setUserInvalid(true);
       if (!password) {
-        setPassHint("Enter your password to continue.");
+        setPassHint("");
         setPassInvalid(true);
       }
       triggerShake();
@@ -157,7 +157,7 @@ export default function Auth() {
       const errorMessage =
         error?.response?.data?.detail ||
         error?.message ||
-        "Invalid credentials";
+        t("login.invalid_credentials");
 
       setPassHint(errorMessage);
       setPassInvalid(true);
@@ -179,11 +179,11 @@ export default function Auth() {
 
       <main className="page">
         <section className="left">
-          <a className="brand" href="#" aria-label="Zigma home" onClick={(e) => e.preventDefault()}>
+          <a className="brand" href="#" aria-label={t("login.brand_home")} onClick={(e) => e.preventDefault()}>
             <img src={ZigmaLogo} alt="Zigma IWMS" width={96} height={90} fetchPriority="high" />
           </a>
 
-          <h1 className="headline">Smart Solutions for a Cleaner, Greener Tomorrow</h1>
+          <h1 className="headline">{t("login.headline")}</h1>
 
           <LoginFeatureChain containerRef={containerRef} />
         </section>
@@ -220,7 +220,7 @@ export default function Auth() {
                 </div>
                 <p className="hint" role="alert">
                   <AlertCircle />
-                  <span>Enter your username or email to continue.</span>
+                  <span>{t("login.enter_username_hint")}</span>
                 </p>
               </div>
 
@@ -244,7 +244,7 @@ export default function Auth() {
                     type="button"
                     className="reveal"
                     aria-pressed={showPassword}
-                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    aria-label={showPassword ? t("login.hide_password") : t("login.show_password")}
                     onClick={() => setShowPassword((v) => !v)}
                   >
                     {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -252,7 +252,7 @@ export default function Auth() {
                 </div>
                 <p className="hint" role="alert">
                   <AlertCircle />
-                  <span>{passHint}</span>
+                  <span>{passHint || t("login.enter_password_hint")}</span>
                 </p>
               </div>
 
@@ -278,7 +278,7 @@ export default function Auth() {
 
             <p className="footnote">
               <Leaf aria-hidden="true" />
-              Together for a Sustainable Future
+              {t("login.footnote")}
             </p>
           </div>
         </section>

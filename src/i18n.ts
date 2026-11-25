@@ -25,44 +25,44 @@ const initialLanguage = (() => {
   return normalizeLanguageCode(localStorage.getItem(LANGUAGE_STORAGE_KEY));
 })();
 
-// Only the active language's translation bundle ships in the initial
-// request — the other two are fetched (and cached) only if the user
-// actually switches to them, via switchLanguage() below. Cuts ~8,400 lines
-// of translation data for two unused languages out of every first load.
-//
-// No top-level await here: i18n.init() starts synchronously (with empty
-// resources) so this module finishes evaluating immediately, same as
-// before this file loaded resources lazily. The initial bundle is merged
-// in via addResourceBundle() once its dynamic import resolves — i18next/
-// react-i18next re-render subscribed components automatically when that
-// happens, so nothing has to wait for it.
-i18n.use(initReactI18next).init({
+const initialization = i18n.use(initReactI18next).init({
   resources: {},
   lng: initialLanguage,
   fallbackLng: "en",
   supportedLngs: ["en", "ta", "hi"],
+  react: { bindI18n: "languageChanged", bindI18nStore: "added removed" },
   interpolation: {
     escapeValue: false,
   },
 });
 
-async function ensureLanguageLoaded(lang: LanguageCode) {
+const pendingLoads = new Map<LanguageCode, Promise<void>>();
+
+export async function ensureLanguageLoaded(lang: LanguageCode) {
   if (isLanguageLoaded(lang)) return;
-  const bundle = await loadLocale(lang);
-  i18n.addResourceBundle(lang, "translation", bundle.translation, true, true);
-  markLanguageLoaded(lang);
+  let pending = pendingLoads.get(lang);
+  if (!pending) {
+    pending = loadLocale(lang).then((bundle) => {
+      i18n.addResourceBundle(lang, "translation", bundle.translation, true, true);
+      markLanguageLoaded(lang);
+    }).finally(() => pendingLoads.delete(lang));
+    pendingLoads.set(lang, pending);
+  }
+  await pending;
 }
 
 export async function switchLanguage(lang: LanguageCode) {
+  await i18nReady;
   await ensureLanguageLoaded(lang);
   await i18n.changeLanguage(lang);
 }
 
-// Kick off the initial language's load immediately (not awaited) so the
-// very first render already has translations by the time i18next's own
-// initial render-blocking suspense (if any) settles, without delaying
-// this module's own synchronous evaluation.
-void ensureLanguageLoaded(initialLanguage);
+// Render only after resources are ready. Always load the English fallback,
+// including on a direct refresh in Tamil or Hindi.
+export const i18nReady = initialization.then(() => Promise.all([
+  ensureLanguageLoaded("en"),
+  ensureLanguageLoaded(initialLanguage),
+]));
 
 if (typeof window !== "undefined") {
   const applyLanguageAttributes = (lng: string) => {

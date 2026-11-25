@@ -17,7 +17,7 @@ export type FormState = {
   remarks: string;
 };
 
-export type CollectionTypeKey = "bin" | "household" | "both" | "unknown";
+export type CollectionTypeKey = "bin" | "household" | "bulk" | "both" | "unknown";
 
 export type NamedRef = {
   unique_id?: string;
@@ -47,6 +47,7 @@ export type DailyTripAssignmentRecord = {
     wards?: WardRef[];
     has_bin?: boolean;
     has_household?: boolean;
+    has_bulk?: boolean;
   };
   household_waste_types?: { unique_id?: string; waste_type_name?: string }[];
   vehicle?: {
@@ -57,7 +58,7 @@ export type DailyTripAssignmentRecord = {
   // Not started and its vehicle is broken down: it cannot start until it is
   // moved to another vehicle or the vehicle is marked repaired.
   vehicle_under_breakdown?: boolean;
-  collection_types?: { has_bin: boolean; has_household: boolean };
+  collection_types?: { has_bin: boolean; has_household: boolean; has_bulk?: boolean };
   collection_points?: DailyTripCollectionPointInline[];
   household_collection_points?: DailyTripHouseholdCollectionInline[];
   staff_template?: { unique_id?: string; display_code?: string };

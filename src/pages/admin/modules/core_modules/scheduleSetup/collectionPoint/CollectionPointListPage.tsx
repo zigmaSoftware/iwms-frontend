@@ -55,10 +55,11 @@ const toRecordList = (value: unknown): CollectionPointRecord[] => {
   return [];
 };
 
-const COLLECTION_TYPE_LABELS: Record<string, string> = {
-  bin_collection: "Secondary Collection Point",
-  bulk_waste_collection: "Bulk Waste Collection",
-  household_collection: "Household Collection",
+// Translation keys (translated at render time).
+const COLLECTION_TYPE_LABEL_KEYS: Record<string, string> = {
+  bin_collection: "admin.collection_point.type_bin_collection",
+  bulk_waste_collection: "admin.collection_point.type_bulk_waste_collection",
+  household_collection: "admin.collection_point.type_household_collection",
 };
 
 const SORTABLE_FIELDS = new Set(["cp_name", "collection_type", "is_active"]);
@@ -110,12 +111,12 @@ export default function CollectionPointListPage() {
 
   const collectionTypeFilter = useOptionFilter({
     param: "collection_type",
-    label: "Collection type",
+    label: t("admin.collection_point.collection_type"),
     options: [
-      { value: "bin_collection", label: "Secondary Collection Point" },
-      { value: "bulk_waste_collection", label: "Bulk Waste Collection" },
+      { value: "bin_collection", label: t("admin.collection_point.type_bin_collection") },
+      { value: "bulk_waste_collection", label: t("admin.collection_point.type_bulk_waste_collection") },
     ],
-    allLabel: "All Types",
+    allLabel: t("admin.collection_point.all_types"),
     onAppliedChange: resetPage,
   });
   const statusFilter = useStatusFilter(resetPage);
@@ -396,7 +397,7 @@ export default function CollectionPointListPage() {
         <Column
           field={showCol("cp_name") ? "cp_name" : "collection_type"}
           header={
-            showCol("cp_name") ? t("admin.nav.collection_point") : "Collection Type"
+            showCol("cp_name") ? t("admin.nav.collection_point") : t("admin.collection_point.collection_type")
           }
           sortable={SORTABLE_FIELDS.has(
             showCol("cp_name") ? "cp_name" : "collection_type",
@@ -416,7 +417,7 @@ export default function CollectionPointListPage() {
                     key="type"
                     className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full ${isBin ? "bg-blue-100 text-blue-800" : "bg-purple-100 text-purple-800"}`}
                   >
-                    {COLLECTION_TYPE_LABELS[type ?? "bin_collection"]}
+                    {t(COLLECTION_TYPE_LABEL_KEYS[type ?? "bin_collection"] ?? "", { defaultValue: type ?? "" })}
                   </span>,
                 ]}
               />
@@ -475,17 +476,17 @@ export default function CollectionPointListPage() {
         {(showCol("latitude") || showCol("longitude")) && (
           <Column
             field="latitude"
-            header="Coordinates"
+            header={t("admin.collection_point.coordinates")}
             style={{ width: "17%" }}
             body={(row: CollectionPointRecord) => (
               <StackCell
                 lines={[
                   showCol("latitude") && {
-                    label: "Lat",
+                    label: t("admin.collection_point.lat_short"),
                     value: toDisplay(row.latitude),
                   },
                   showCol("longitude") && {
-                    label: "Long",
+                    label: t("admin.collection_point.long_short"),
                     value: toDisplay(row.longitude),
                   },
                 ]}

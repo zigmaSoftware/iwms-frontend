@@ -43,6 +43,7 @@ const extractError = (error: unknown): string | null => {
 };
 
 const BreakdownCell = ({ row }: { row: BinCERecord }) => {
+  const { t } = useTranslation();
   const bd = row.breakdown_info;
   if (!bd) return <span className="text-xs text-gray-300">—</span>;
 
@@ -60,18 +61,22 @@ const BreakdownCell = ({ row }: { row: BinCERecord }) => {
               : "bg-red-100 text-red-700"
         }`}
       >
-        {isApproved ? "✓ Replaced" : isPending ? "⚠ Pending" : "✕ Rejected"}
+        {isApproved
+          ? `✓ ${t("admin.bin_collection_event.breakdown_replaced")}`
+          : isPending
+            ? `⚠ ${t("admin.bin_collection_event.breakdown_pending")}`
+            : `✕ ${t("admin.bin_collection_event.breakdown_rejected")}`}
       </span>
       {isApproved && bd.replacement_vehicle_no && (
         <div className="text-[10px] text-gray-600 leading-tight">
-          <span className="font-medium">Veh:</span> {bd.replacement_vehicle_no}
+          <span className="font-medium">{t("admin.bin_collection_event.abbr_vehicle")}:</span> {bd.replacement_vehicle_no}
         </div>
       )}
       {isApproved && (bd.replacement_driver || bd.replacement_operator) && (
         <div className="text-[10px] text-gray-600 leading-tight">
           {bd.replacement_driver && (
             <span>
-              <span className="font-medium">Drv:</span> {bd.replacement_driver}
+              <span className="font-medium">{t("admin.bin_collection_event.abbr_driver")}:</span> {bd.replacement_driver}
             </span>
           )}
           {bd.replacement_driver && bd.replacement_operator && (
@@ -79,7 +84,7 @@ const BreakdownCell = ({ row }: { row: BinCERecord }) => {
           )}
           {bd.replacement_operator && (
             <span>
-              <span className="font-medium">Opr:</span>{" "}
+              <span className="font-medium">{t("admin.bin_collection_event.abbr_operator")}:</span>{" "}
               {bd.replacement_operator}
             </span>
           )}
@@ -98,12 +103,11 @@ const formatDate = (val?: string) => {
   });
 };
 
-// A5: BinCollectionEvent.STATUS_CHOICES.
-const STATUS_OPTIONS = [
-  { value: "Collected", label: "Collected" },
-  { value: "Not Collected", label: "Not Collected" },
-  { value: "Collect Later", label: "Collect Later" },
-];
+// A5: BinCollectionEvent.STATUS_CHOICES (values are API enums; labels translated at render).
+const STATUS_VALUES = ["Collected", "Not Collected", "Collect Later"] as const;
+
+const statusLabelKey = (value: string) =>
+  `admin.bin_collection_event.status_values.${value.toLowerCase().replace(/\s+/g, "_")}`;
 
 const STATUS_STYLES: Record<string, string> = {
   Collected: "bg-green-100 text-green-800",
@@ -111,15 +115,21 @@ const STATUS_STYLES: Record<string, string> = {
   "Collect Later": "bg-amber-100 text-amber-800",
 };
 
-const StatusBadge = ({ value }: { value?: string }) => (
-  <span
-    className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${STATUS_STYLES[value ?? ""] ?? "bg-gray-100 text-gray-600"}`}
-  >
-    {value ?? "Collected"}
-  </span>
-);
+const StatusBadge = ({ value }: { value?: string }) => {
+  const { t } = useTranslation();
+  const status = value ?? "Collected";
+  return (
+    <span
+      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${STATUS_STYLES[value ?? ""] ?? "bg-gray-100 text-gray-600"}`}
+    >
+      {t(statusLabelKey(status), { defaultValue: status })}
+    </span>
+  );
+};
 
 const today = new Date().toISOString().split("T")[0];
+
+const N = "admin.bin_collection_event.";
 
 export default function BinCollectionEventList() {
   const { t } = useTranslation();
@@ -139,13 +149,21 @@ export default function BinCollectionEventList() {
   const { companies, isSuperAdmin } = companyProject.selection;
   const datePart = useDraftFilter({
     empty: { collection_date: "" },
-    chips: { collection_date: { label: "Date" } },
+    chips: { collection_date: { label: t("common.date") } },
   });
+  const statusOptions = useMemo(
+    () =>
+      STATUS_VALUES.map((value) => ({
+        value,
+        label: t(statusLabelKey(value), { defaultValue: value }),
+      })),
+    [t],
+  );
   // A5: viewset supports ward_id/zone_id/status query-param filters.
   const statusPart = useOptionFilter({
     param: "status",
-    label: "Status",
-    options: STATUS_OPTIONS,
+    label: t("common.status"),
+    options: statusOptions,
   });
   const dateFilter = datePart.applied.collection_date;
   const statusFilter = statusPart.value;
@@ -287,18 +305,20 @@ export default function BinCollectionEventList() {
 
   const buildExportRows = () =>
     filteredRows.map((r) => ({
-      "Trip Plan": r._trip_plan,
-      "Collection Point": r._collection_point,
-      PLB: r._panchayat,
-      Ward: r._ward,
-      Zone: r._zone,
-      Bin: r._bin,
-      "Waste Type": r._waste_type,
-      Vehicle: r._vehicle,
-      "Weight (kg)": r.collected_weight_kg ?? "-",
-      "Collection Date": r.collection_date,
-      "Collection Time": formatCollectionTime(r.created_at),
-      Status: r.status ?? "Collected",
+      [t(`${N}trip_plan`)]: r._trip_plan,
+      [t(`${N}collection_point`)]: r._collection_point,
+      [t(`${N}plb`)]: r._panchayat,
+      [t("common.ward")]: r._ward,
+      [t("common.zone")]: r._zone,
+      [t(`${N}bin`)]: r._bin,
+      [t("common.waste_type")]: r._waste_type,
+      [t("common.vehicle")]: r._vehicle,
+      [t(`${N}weight_kg`)]: r.collected_weight_kg ?? "-",
+      [t(`${N}collection_date`)]: r.collection_date,
+      [t(`${N}collection_time`)]: formatCollectionTime(r.created_at),
+      [t("common.status")]: t(statusLabelKey(r.status ?? "Collected"), {
+        defaultValue: r.status ?? "Collected",
+      }),
     }));
 
   const handleDownloadPdf = async () => {
@@ -306,13 +326,13 @@ export default function BinCollectionEventList() {
     if (exportRows.length === 0) {
       Swal.fire({
         icon: "warning",
-        title: "No records",
-        text: "There are no secondary bin collection events to export.",
+        title: t(`${N}no_records_title`),
+        text: t(`${N}no_records_export`),
       });
       return;
     }
     await downloadRecordsPdf({
-      title: "Secondary Bin Collection Events",
+      title: t(`${N}title`),
       filename: "secondary_bin_collection_events.pdf",
       rows: exportRows,
       columns: Object.keys(exportRows[0]).map((key) => ({ key, label: key })),
@@ -341,13 +361,13 @@ export default function BinCollectionEventList() {
   }, [filteredRows]);
 
   const dateField = (
-    <FilterSection label="Collection date">
+    <FilterSection label={t(`${N}collection_date`)}>
       <input
         type="date"
         value={datePart.draft.collection_date}
         onChange={(e) => datePart.setField("collection_date", e.target.value)}
         className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-        aria-label="Collection date"
+        aria-label={t(`${N}collection_date`)}
       />
     </FilterSection>
   );
@@ -356,10 +376,10 @@ export default function BinCollectionEventList() {
     <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-semibold text-gray-800">
-          Secondary Bin Collection Events
+          {t(`${N}title`)}
         </h1>
         <p className="text-sm text-gray-500">
-          Scan audit log — one record per operator bin scan
+          {t(`${N}subtitle`)}
         </p>
       </div>
 
@@ -367,16 +387,16 @@ export default function BinCollectionEventList() {
         <KpiCard
           icon="pi pi-box"
           tone="bg-emerald-50 text-emerald-600"
-          label="Overall weight"
+          label={t(`${N}kpi_overall_weight`)}
           value={formatKg(overallWeight)}
-          hint={`${totalRecords.toLocaleString()} collections`}
+          hint={t(`${N}kpi_overall_hint`, { count: totalRecords, formattedCount: totalRecords.toLocaleString() })}
         />
         <KpiCard
           icon="pi pi-calendar"
           tone="bg-cyan-50 text-cyan-600"
-          label="Today's weight"
+          label={t(`${N}kpi_today_weight`)}
           value={formatKg(dailyWeight)}
-          hint={`${dailyCount.toLocaleString()} collections today`}
+          hint={t(`${N}kpi_today_hint`, { count: dailyCount, formattedCount: dailyCount.toLocaleString() })}
         />
       </div>
 
@@ -395,7 +415,7 @@ export default function BinCollectionEventList() {
           <div className="flex flex-wrap items-center gap-2">
             {canAdd && (
               <Button
-                label="Add Secondary Bin Collection Event"
+                label={t(`${N}add_button`)}
                 icon="pi pi-plus"
                 className="p-button-success p-button-sm"
                 onClick={() =>
@@ -445,7 +465,7 @@ export default function BinCollectionEventList() {
         showGridlines
         fitWidth
         className="p-datatable-sm"
-        emptyMessage="No secondary bin collection events found"
+        emptyMessage={t(`${N}empty_message`)}
       >
         <Column
           header={t("common.s_no")}
@@ -454,7 +474,7 @@ export default function BinCollectionEventList() {
         />
         <Column
           field="_trip_plan"
-          header="Trip Plan"
+          header={t(`${N}trip_plan`)}
           filter
           showFilterMatchModes={false}
           style={{ width: "22%" }}
@@ -462,24 +482,24 @@ export default function BinCollectionEventList() {
             <StackCell
               primary={row._trip_plan}
               lines={[
-                { icon: "pi-map-marker", value: row._collection_point, title: "Collection Point" },
-                { label: "Bin", value: row._bin },
+                { icon: "pi-map-marker", value: row._collection_point, title: t(`${N}collection_point`) },
+                { label: t(`${N}bin`), value: row._bin },
               ]}
             />
           )}
         />
         {locationColumn<(typeof rows)[number]>({
-          header: "Location",
+          header: t("common.location"),
           style: { width: "14%" },
           levels: [
-            { label: "Panchayat", value: (row) => String(row._panchayat) },
-            { label: "Zone", value: (row) => String(row._zone) },
-            { label: "Ward", value: (row) => String(row._ward) },
+            { label: t("common.panchayat"), value: (row) => String(row._panchayat) },
+            { label: t("common.zone"), value: (row) => String(row._zone) },
+            { label: t("common.ward"), value: (row) => String(row._ward) },
           ],
         })}
         <Column
           field="_waste_type"
-          header="Waste Type"
+          header={t("common.waste_type")}
           filter
           showFilterMatchModes={false}
           style={{ width: "11%" }}
@@ -493,7 +513,7 @@ export default function BinCollectionEventList() {
         />
         <Column
           field="_vehicle"
-          header="Vehicle"
+          header={t("common.vehicle")}
           style={{ width: "18%" }}
           body={(row: (typeof rows)[number]) => (
             <StackCell
@@ -504,7 +524,7 @@ export default function BinCollectionEventList() {
         />
         <Column
           field="collection_date"
-          header="Collected"
+          header={t(`${N}collected_on`)}
           filter
           showFilterMatchModes={false}
           style={{ width: "13%" }}
@@ -513,14 +533,14 @@ export default function BinCollectionEventList() {
               primary={formatDate(row.collection_date)}
               lines={[
                 { icon: "pi-clock", value: formatCollectionTime(row.created_at) },
-                { label: "Weight (kg)", value: row.collected_weight_kg },
+                { label: t(`${N}weight_kg`), value: row.collected_weight_kg },
               ]}
             />
           )}
         />
         <Column
           field="status"
-          header="Status"
+          header={t("common.status")}
           filter
           showFilterMatchModes={false}
           style={{ width: "12%" }}
@@ -531,7 +551,7 @@ export default function BinCollectionEventList() {
                 row.status_evidence_image_url ? (
                   <EvidenceImagePreview
                     url={row.status_evidence_image_url}
-                    label={`Bin status evidence ${row.unique_id ?? ""}`}
+                    label={t(`${N}evidence_label`, { id: row.unique_id ?? "" })}
                   />
                 ) : null,
               ]}
@@ -544,7 +564,7 @@ export default function BinCollectionEventList() {
           body={(row: BinCERecord) => (
             <div className="flex justify-center">
               <ActionMenu
-                editLabel="View"
+                editLabel={t("common.view")}
                 onEdit={() =>
                   navigate(VIEW_PATH(row.unique_id ?? ""), {
                     state: { companyUniqueId, projectId },

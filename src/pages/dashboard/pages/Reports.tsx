@@ -1,5 +1,6 @@
 import { lazy, Suspense, useState } from "react";
 import { BarChart3, CalendarDays, Sparkles } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -20,6 +21,7 @@ const MonthlyWasteComparisonListPage = lazy(
 type WasteReportTab = "daily" | "monthly";
 
 export default function Reports() {
+  const { t } = useTranslation();
   const [activeReport, setActiveReport] = useState<WasteReportTab>("daily");
 
   return (
@@ -37,11 +39,11 @@ export default function Reports() {
               <div>
                 <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-300">
                   <Sparkles className="h-4 w-4" />
-                  <span className="text-sm font-semibold">Waste Insights Hub</span>
+                  <span className="text-sm font-semibold">{t("dashboard.reports.waste_report_title")}</span>
                 </div>
-                <h1 className="mt-0.5 text-2xl font-bold tracking-tight text-gray-900 dark:text-white">Daily & Monthly Waste Comparisons</h1>
+                <h1 className="mt-0.5 text-2xl font-bold tracking-tight text-gray-900 dark:text-white">{t("dashboard.reports.waste_report_subtitle")}</h1>
                 <p className="mt-0.5 text-sm text-muted-foreground">
-                  Live collection weight, trips, coverage, and waste composition restricted to your assigned hierarchy.
+                  {t("dashboard.reports.waste_report_scope")}
                 </p>
               </div>
               <TabsList className="h-auto gap-1 rounded-xl border bg-slate-50 p-1 shadow-sm dark:border-white/10 dark:bg-white/5">
@@ -50,14 +52,14 @@ export default function Reports() {
                   className="gap-1.5 rounded-lg px-4 py-2 text-sm font-semibold data-[state=active]:bg-emerald-600 data-[state=active]:text-white data-[state=active]:shadow-sm dark:data-[state=active]:bg-emerald-400 dark:data-[state=active]:text-emerald-950"
                 >
                   <CalendarDays className="h-4 w-4" />
-                  Daily
+                  {t("dashboard.reports.waste_report_daily")}
                 </TabsTrigger>
                 <TabsTrigger
                   value="monthly"
                   className="gap-1.5 rounded-lg px-4 py-2 text-sm font-semibold data-[state=active]:bg-emerald-600 data-[state=active]:text-white data-[state=active]:shadow-sm dark:data-[state=active]:bg-emerald-400 dark:data-[state=active]:text-emerald-950"
                 >
                   <BarChart3 className="h-4 w-4" />
-                  Monthly
+                  {t("dashboard.reports.waste_report_monthly")}
                 </TabsTrigger>
               </TabsList>
             </div>

@@ -1,5 +1,6 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { districtApi } from "@/api";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -17,12 +18,13 @@ export default function DistrictAuth() {
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
+  const { t } = useTranslation();
 
   // Explain an automatic logout (idle timeout / session expiry)
   useEffect(() => {
     const sessionMessage = (location.state as { sessionMessage?: string } | null)?.sessionMessage;
     if (sessionMessage) {
-      toast({ title: "Session Ended", description: sessionMessage });
+      toast({ title: t("login.session_ended"), description: sessionMessage });
       window.history.replaceState({}, "");
     }
   }, []);
@@ -30,7 +32,7 @@ export default function DistrictAuth() {
   const handleSignIn = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!username.trim() || !password.trim()) {
-      toast({ title: "Required", description: "Enter username and password.", variant: "destructive" });
+      toast({ title: t("login.required"), description: t("login.enter_username_password"), variant: "destructive" });
       return;
     }
     setLoading(true);
@@ -54,8 +56,8 @@ export default function DistrictAuth() {
         error?.response?.data?.non_field_errors?.[0] ||
         error?.response?.data?.detail ||
         error?.message ||
-        "Invalid credentials";
-      toast({ title: "Login Failed", description: message, variant: "destructive" });
+        t("login.invalid_credentials");
+      toast({ title: t("login.login_failed"), description: message, variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -89,10 +91,10 @@ export default function DistrictAuth() {
         {/* heading */}
         <div className="mb-7 text-center">
           <h1 className="text-2xl font-extrabold tracking-tight text-slate-800 sm:text-3xl">
-            District Login
+            {t("login.district.title")}
           </h1>
           <p className="mx-auto mt-2 max-w-xs text-sm leading-relaxed text-slate-500">
-            Sign in to access your district dashboard.
+            {t("login.district.subtitle")}
           </p>
         </div>
 
@@ -100,14 +102,14 @@ export default function DistrictAuth() {
         <form onSubmit={handleSignIn} className="space-y-4">
           <div className="space-y-1.5">
             <label htmlFor="district-username" className="block text-[11px] font-bold uppercase tracking-widest text-slate-500">
-              Username
+              {t("login.username")}
             </label>
             <div className="relative">
               <User className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <Input
                 id="district-username"
                 type="text"
-                placeholder="Enter your username"
+                placeholder={t("login.forgot.username_placeholder")}
                 value={username}
                 onChange={(e: ChangeEvent<HTMLInputElement>) => setUsername(e.target.value)}
                 className="h-12 rounded-xl border-slate-200 bg-slate-50 pl-10 text-slate-900 placeholder:text-slate-400 focus-visible:border-blue-400 focus-visible:ring-blue-300/50 transition-all"
@@ -118,14 +120,14 @@ export default function DistrictAuth() {
 
           <div className="space-y-1.5">
             <label htmlFor="district-password" className="block text-[11px] font-bold uppercase tracking-widest text-slate-500">
-              Password
+              {t("login.password")}
             </label>
             <div className="relative">
               <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <Input
                 id="district-password"
                 type={showPassword ? "text" : "password"}
-                placeholder="Enter your password"
+                placeholder={t("login.enter_password_placeholder")}
                 value={password}
                 onChange={(e: ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
                 className="h-12 rounded-xl border-slate-200 bg-slate-50 pl-10 pr-12 text-slate-900 placeholder:text-slate-400 focus-visible:border-blue-400 focus-visible:ring-blue-300/50 transition-all"
@@ -135,7 +137,7 @@ export default function DistrictAuth() {
                 type="button"
                 onClick={() => setShowPassword((v) => !v)}
                 className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 transition-colors hover:text-slate-600"
-                aria-label={showPassword ? "Hide password" : "Show password"}
+                aria-label={showPassword ? t("login.hide_password") : t("login.show_password")}
               >
                 {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
@@ -153,11 +155,11 @@ export default function DistrictAuth() {
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z" />
                 </svg>
-                Authenticating…
+                {t("login.authenticating")}
               </>
             ) : (
               <>
-                Sign in
+                {t("login.sign_in")}
                 <ArrowRight className="h-4 w-4" />
               </>
             )}
@@ -166,8 +168,8 @@ export default function DistrictAuth() {
 
         {/* card footer */}
         <p className="mt-8 text-center text-[11px] text-slate-400">
-          Secure login ·{" "}
-          <span className="font-semibold text-slate-500">Zigma IWMS · District Portal</span>
+          {t("login.secure_login")} ·{" "}
+          <span className="font-semibold text-slate-500">{t("login.district.portal")}</span>
         </p>
       </div>
     </div>

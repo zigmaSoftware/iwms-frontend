@@ -1,6 +1,6 @@
 import type { FormDataType, Option } from "./types";
 import { createCrudRoutePaths } from "@/utils/routePaths";
-import { useEffect, useState, useMemo } from "react";
+import { useCallback, useEffect, useState, useMemo } from "react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import Swal from "@/lib/notify";
 import { api } from "@/api";
@@ -78,6 +78,37 @@ const isResidentialName = (value: string) =>
   RESIDENTIAL_PROPERTY_KEYWORDS.some((keyword) => value.includes(keyword)) ||
   RESIDENTIAL_SUB_PROPERTY_KEYWORDS.some((keyword) => value.includes(keyword));
 
+// Fields hidden when the "Without QR" option is selected.
+// Country / state / district / city / zone / ward / panchayat and
+// property_id / sub_property_id stay visible.
+const WITHOUT_QR_HIDDEN_FIELDS = [
+  // personal info
+  "customer_name",
+  "contact_no",
+  "username",
+  "app_module",
+  "email",
+  "password",
+  // address info
+  "building_no",
+  "street",
+  "area",
+  "pincode",
+  "latitude",
+  "longitude",
+  // property info (extra fields)
+  "sqft",
+  "water_consumption_lpd",
+  "waste_collection_kg_per_day",
+  "waste_type_ids",
+  "is_bulkwaste_generator",
+  // identification
+  "id_proof_type",
+  "id_no",
+  "member_count",
+  "family_members",
+];
+
 const CUSTOMER_CREATION_FIELDS: Record<string, string[]> = {
   customer_name: ["customer_name", "name"],
   contact_no: ["contact_no", "mobile"],
@@ -110,12 +141,6 @@ const CUSTOMER_CREATION_FIELDS: Record<string, string[]> = {
   panchayat_id: ["panchayat_id", "panchayat"],
   is_active: ["is_active"],
   is_bulkwaste_generator: ["is_bulkwaste_generator"],
-  apartment_name: ["apartment_name"],
-  block_no: ["block_no"],
-  flat_no: ["flat_no"],
-  villa_no: ["villa_no"],
-  industry_name: ["industry_name"],
-  industry_type: ["industry_type"],
 };
 
 /* ===============================
@@ -184,6 +209,8 @@ const FormInput = ({
   maxLength,
   inputMode,
   step,
+  min,
+  max,
   isRequired = true,
   error,
 }: {
@@ -195,6 +222,8 @@ const FormInput = ({
   maxLength?: number;
   inputMode?: "text" | "numeric" | "decimal";
   step?: string;
+  min?: number;
+  max?: number;
   isRequired?: boolean;
   error?: string;
 }) => (
@@ -211,6 +240,8 @@ const FormInput = ({
       maxLength={maxLength}
       inputMode={inputMode}
       step={step}
+      min={min}
+      max={max}
       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
       autoComplete="off"
     />
@@ -613,11 +644,12 @@ function CustomerChangePasswordModal({
 ================================ */
 export default function CustomerCreationForm() {
   const { t } = useTranslation();
-  const { showField, filterPayload } = useFieldVisibility(
+  const { showField: originalShowField, filterPayload } = useFieldVisibility(
     "customer-master",
     "customer-creation",
     CUSTOMER_CREATION_FIELDS,
   );
+
   const navigate = useNavigate();
   const { id } = useParams();
   const isEdit = Boolean(id);
@@ -689,14 +721,24 @@ export default function CustomerCreationForm() {
     project_id: "",
     is_active: true,
     is_bulkwaste_generator: false,
-    // Property type specific fields
-    apartment_name: "",
-    block_no: "",
-    flat_no: "",
-    villa_no: "",
-    industry_name: "",
-    industry_type: "",
+    is_without_qr: false,
+    count: 1,
   });
+
+  // Depends on formData.is_without_qr (state, not a ref) so the form
+  // re-renders and fields hide/show as soon as the QR option changes.
+  const showField = useCallback(
+    (fieldKey: string): boolean => {
+      if (
+        formData.is_without_qr &&
+        WITHOUT_QR_HIDDEN_FIELDS.includes(fieldKey)
+      ) {
+        return false;
+      }
+      return originalShowField(fieldKey);
+    },
+    [originalShowField, formData.is_without_qr],
+  );
 
   const { showZone, showPanchayat } = useZonePanchayatVisibility({
     companyId: companyUniqueId,
@@ -1123,6 +1165,7 @@ export default function CustomerCreationForm() {
       latitude: String(data.latitude ?? ""),
       longitude: String(data.longitude ?? ""),
       sqft: String(data.sqft ?? ""),
+      is_without_qr: Boolean(data.is_without_qr),
       water_consumption_lpd: String(data.water_consumption_lpd ?? ""),
       waste_collection_kg_per_day: String(
         data.waste_collection_kg_per_day ?? "",
@@ -1155,12 +1198,6 @@ export default function CustomerCreationForm() {
       project_id: String(data.project_id ?? ""),
       is_active: Boolean(data.is_active),
       is_bulkwaste_generator: Boolean(data.is_bulkwaste_generator),
-      apartment_name: String(data.apartment_name ?? ""),
-      block_no: String(data.block_no ?? ""),
-      flat_no: String(data.flat_no ?? ""),
-      villa_no: String(data.villa_no ?? ""),
-      industry_name: String(data.industry_name ?? ""),
-      industry_type: String(data.industry_type ?? ""),
     }));
     setPendingEditData(null);
   }, [
@@ -1300,10 +1337,6 @@ export default function CustomerCreationForm() {
   );
 
   const subName = selectedSubProperty?.sub_property_name?.toLowerCase() || "";
-  const isIndividual =
-    subName.includes("individual") || subName.includes("house");
-  const isApartment = subName.includes("apartment");
-  const isVilla = subName.includes("villa");
   const isIndustry = subName.includes("industry");
   const propertyName = [
     selectedPropertyRecord?.property_name,
@@ -1317,6 +1350,9 @@ export default function CustomerCreationForm() {
     .toLowerCase();
   const isResidentialProperty =
     !isIndustry && isResidentialName(`${propertyName} ${subName}`);
+  const isResidentialIndividualHouse =
+    isResidentialProperty &&
+    (subName.includes("individual") || subName.includes("house"));
   const visibleWasteTypes = useMemo(
     () =>
       dropdowns.wasteTypes.filter((wasteType: any) => {
@@ -1345,9 +1381,6 @@ export default function CustomerCreationForm() {
     formData.water_consumption_lpd,
     formData.waste_collection_kg_per_day,
   ]);
-
-  // const zoneOrWardSelected  = Boolean(formData.zone_id || formData.ward_id);
-  // const panchayatSelected   = Boolean(formData.panchayat_id);
   const isPanchayatSelected = Boolean(formData.panchayat_id);
   const isZoneSelected = Boolean(formData.zone_id);
 
@@ -1366,12 +1399,15 @@ export default function CustomerCreationForm() {
     });
   }, [isResidentialProperty, visibleWasteTypes]);
 
+  // A threshold match always identifies the customer as a bulk waste
+  // generator. Below the threshold, staff can still set the flag manually.
   useEffect(() => {
-    setFormData((prev) => {
-      if (prev.is_bulkwaste_generator === isBulkWasteThresholdMatched)
-        return prev;
-      return { ...prev, is_bulkwaste_generator: isBulkWasteThresholdMatched };
-    });
+    if (!isBulkWasteThresholdMatched) return;
+    setFormData((previous) =>
+      previous.is_bulkwaste_generator
+        ? previous
+        : { ...previous, is_bulkwaste_generator: true },
+    );
   }, [isBulkWasteThresholdMatched]);
 
   /* ===============================
@@ -1382,18 +1418,29 @@ export default function CustomerCreationForm() {
     // username, pincode, latitude, longitude, sqft, id_proof_type, id_no,
     // country/state/district/city, property/sub-property, and the
     // water/waste non-negative checks) now run through the shared Zod
-    // schema, relaxed for fields hidden by column permissions.
+    // schema, relaxed for fields hidden by column permissions or by the
+    // "Without QR" option (both go through showField).
     const schema = requireWhenVisible(customerCreationSchema, showField);
     const validation = parseWithSchema(schema, formData);
     if (!validation.success) {
-      setFieldErrors(validation.errors);
-      const firstError = Object.values(validation.errors)[0];
-      Swal.fire(
-        t("common.warning") || "Warning",
-        firstError ?? "Please fill in all required fields",
-        "warning",
+      // Without QR hides these fields, so their errors must not block saving.
+      // With QR keeps every error (building_no and sqft stay required).
+      const errors = Object.fromEntries(
+        Object.entries(validation.errors).filter(
+          ([key]) =>
+            !formData.is_without_qr || !WITHOUT_QR_HIDDEN_FIELDS.includes(key),
+        ),
       );
-      return false;
+
+      if (Object.keys(errors).length > 0) {
+        setFieldErrors(errors);
+        Swal.fire(
+          t("common.warning") || "Warning",
+          Object.values(errors)[0] ?? "Please fill in all required fields",
+          "warning",
+        );
+        return false;
+      }
     }
     setFieldErrors({});
 
@@ -1431,6 +1478,15 @@ export default function CustomerCreationForm() {
 
     if (!validateForm()) return;
 
+    // Without QR: `count` is the number of customers the backend creates
+    // (Customer-1, Customer-2, ...), so member_count is not used.
+    const memberCount =
+      !formData.is_without_qr &&
+      isResidentialIndividualHouse &&
+      formData.member_count
+        ? Number.parseInt(formData.member_count, 10)
+        : null;
+
     const rawPayload = {
       ...formData,
       company_id: companyUniqueId,
@@ -1450,14 +1506,19 @@ export default function CustomerCreationForm() {
       waste_collection_kg_per_day: formData.waste_collection_kg_per_day
         ? String(parseFloat(formData.waste_collection_kg_per_day))
         : null,
-      member_count: formData.member_count
-        ? Number.parseInt(formData.member_count, 10)
-        : null,
-      family_members: formData.family_members,
+      member_count: memberCount,
+      family_members:
+        !formData.is_without_qr && isResidentialIndividualHouse
+          ? formData.family_members
+          : [],
       waste_type_ids: formData.waste_type_ids,
       ...(isEdit && !formData.password ? { password: undefined } : {}), // Only include password for new records
     };
-    const payload = filterPayload(rawPayload, ["company_id", "project_id"]);
+    const payload = filterPayload(rawPayload, [
+      "company_id",
+      "project_id",
+      "is_without_qr",
+    ]);
 
     setIsSubmitting(true);
     try {
@@ -1546,6 +1607,54 @@ export default function CustomerCreationForm() {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="mb-4 grid grid-cols-1 gap-6 md:grid-cols-3">
+            <ShadcnSelect
+              label={tOrFallback("admin.customer_creation.qr_option", "QR Option")}
+              value={formData.is_without_qr ? "without" : "with"}
+              onChange={(v: string) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  is_without_qr: v === "without",
+                }))
+              }
+              options={[
+                {
+                  value: "with",
+                  label: tOrFallback("admin.customer_creation.with_qr", "With QR"),
+                },
+                {
+                  value: "without",
+                  label: tOrFallback(
+                    "admin.customer_creation.without_qr",
+                    "Without QR",
+                  ),
+                },
+              ]}
+              placeholder={tOrFallback(
+                "admin.customer_creation.select_qr_option",
+                "Select QR option",
+              )}
+              isRequired={false}
+            />
+
+            {formData.is_without_qr && (
+              <FormInput
+                label={tOrFallback("admin.customer_creation.count", "Count")}
+                type="number"
+                value={String(formData.count)}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    count: Number(e.target.value) || 1,
+                  }))
+                }
+                placeholder="1"
+                inputMode="numeric"
+                min={1}
+                max={999}
+              />
+            )}
+          </div>
           <FormSection
             title={
               t("admin.customer_creation.company_project_info") ||
@@ -1615,155 +1724,159 @@ export default function CustomerCreationForm() {
             )}
           </FormSection>
 
-          <FormSection
-            title={
-              t("admin.customer_creation.personal_info") ||
-              "Personal Information"
-            }
-          >
-            {showField("customer_name") && (
-              <FormInput
-                label={
-                  t("admin.customer_creation.customer_name") || "Customer Name"
-                }
-                value={formData.customer_name}
-                onChange={(e) => update("customer_name", e.target.value)}
-                placeholder="Enter full name"
-                error={fieldErrors.customer_name}
-                isRequired={false}
-              />
-            )}
-            {showField("contact_no") && (
-              <FormInput
-                label={
-                  t("admin.customer_creation.contact_no") || "Contact Number"
-                }
-                value={formData.contact_no}
-                onChange={(e) => {
-                  const numericValue = e.target.value.replace(/[^0-9]/g, "");
-                  update("contact_no", numericValue);
-                }}
-                placeholder="10 digit mobile number"
-                maxLength={10}
-                inputMode="numeric"
-                error={fieldErrors.contact_no}
-                isRequired={false}
-              />
-            )}
-            {showField("username") && (
-              <FormInput
-                label={t("login.username") || "Username"}
-                value={formData.username}
-                onChange={(e) => update("username", e.target.value)}
-                placeholder="Enter username"
-                error={fieldErrors.username}
-                isRequired={false}
-              />
-            )}
-            {showField("app_module") && (
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Mobile App
-                </label>
-                <Select
-                  value={formData.app_module || "citizen"}
-                  onValueChange={(value) => update("app_module", value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select the app this customer opens" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {appModuleOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  Which app opens after sign-in. Whether they may sign in, and
-                  which screens they see, is set in Customer Access
-                  Configuration.
-                </p>
-              </div>
-            )}
-            {showField("email") && (
-              <FormInput
-                label={t("admin.customer_creation.email") || "Email Address"}
-                value={formData.email}
-                onChange={(e) => update("email", e.target.value)}
-                placeholder="Enter email address"
-                type="email"
-                error={fieldErrors.email}
-                isRequired={false}
-              />
-            )}
+          {/* Personal Information — hidden entirely for Without QR */}
+          {!formData.is_without_qr && (
+            <FormSection
+              title={
+                t("admin.customer_creation.personal_info") ||
+                "Personal Information"
+              }
+            >
+              {showField("customer_name") && (
+                <FormInput
+                  label={
+                    t("admin.customer_creation.customer_name") ||
+                    "Customer Name"
+                  }
+                  value={formData.customer_name}
+                  onChange={(e) => update("customer_name", e.target.value)}
+                  placeholder="Enter full name"
+                  error={fieldErrors.customer_name}
+                  isRequired={false}
+                />
+              )}
+              {showField("contact_no") && (
+                <FormInput
+                  label={
+                    t("admin.customer_creation.contact_no") || "Contact Number"
+                  }
+                  value={formData.contact_no}
+                  onChange={(e) => {
+                    const numericValue = e.target.value.replace(/[^0-9]/g, "");
+                    update("contact_no", numericValue);
+                  }}
+                  placeholder="10 digit mobile number"
+                  maxLength={10}
+                  inputMode="numeric"
+                  error={fieldErrors.contact_no}
+                  isRequired={false}
+                />
+              )}
+              {showField("username") && (
+                <FormInput
+                  label={t("login.username") || "Username"}
+                  value={formData.username}
+                  onChange={(e) => update("username", e.target.value)}
+                  placeholder="Enter username"
+                  error={fieldErrors.username}
+                  isRequired={false}
+                />
+              )}
+              {showField("app_module") && (
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Mobile App
+                  </label>
+                  <Select
+                    value={formData.app_module || "citizen"}
+                    onValueChange={(value) => update("app_module", value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select the app this customer opens" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {appModuleOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    Which app opens after sign-in. Whether they may sign in,
+                    and which screens they see, is set in Customer Access
+                    Configuration.
+                  </p>
+                </div>
+              )}
+              {showField("email") && (
+                <FormInput
+                  label={t("admin.customer_creation.email") || "Email Address"}
+                  value={formData.email}
+                  onChange={(e) => update("email", e.target.value)}
+                  placeholder="Enter email address"
+                  type="email"
+                  error={fieldErrors.email}
+                  isRequired={false}
+                />
+              )}
 
-            {(showField("password") || isEdit) && (
-              <PasswordInput
-                label={t("login.password") || "Password"}
-                value={formData.password}
-                onChange={(e) => update("password", e.target.value)}
-                placeholder={
-                  isEdit
-                    ? "Leave blank to keep current password"
-                    : "Enter password (min 8 chars)"
-                }
-                isRequired={false}
-              />
-            )}
+              {(showField("password") || isEdit) && (
+                <PasswordInput
+                  label={t("login.password") || "Password"}
+                  value={formData.password}
+                  onChange={(e) => update("password", e.target.value)}
+                  placeholder={
+                    isEdit
+                      ? "Leave blank to keep current password"
+                      : "Enter password (min 8 chars)"
+                  }
+                  isRequired={false}
+                />
+              )}
 
-            {/* ── Password Security Info (edit mode only) ── */}
-            {isEdit && (
-              <div className="md:col-span-3">
-                <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/40">
-                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-sm font-semibold text-gray-700 dark:text-gray-200">
-                      Password Security
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => setShowChangePassword(true)}
-                      className="flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
-                    >
-                      Change Password
-                    </button>
-                  </div>
-                  <div className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
-                    <div>
-                      <span className="text-gray-500">Account Created:</span>{" "}
-                      <span className="font-medium text-gray-800 dark:text-gray-100">
-                        {customerCreatedAt
-                          ? new Date(customerCreatedAt).toLocaleString()
-                          : "—"}
-                      </span>
+              {/* ── Password Security Info (edit mode only) ── */}
+              {isEdit && (
+                <div className="md:col-span-3">
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/40">
+                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-sm font-semibold text-gray-700 dark:text-gray-200">
+                        Password Security
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setShowChangePassword(true)}
+                        className="flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
+                      >
+                        Change Password
+                      </button>
                     </div>
-                    <div>
-                      <span className="text-gray-500">
-                        Last Password Changed:
-                      </span>{" "}
-                      <span className="font-medium text-gray-800 dark:text-gray-100">
-                        {passwordCrtDate
-                          ? new Date(passwordCrtDate).toLocaleString()
-                          : "Never changed"}
-                      </span>
+                    <div className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
+                      <div>
+                        <span className="text-gray-500">Account Created:</span>{" "}
+                        <span className="font-medium text-gray-800 dark:text-gray-100">
+                          {customerCreatedAt
+                            ? new Date(customerCreatedAt).toLocaleString()
+                            : "—"}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">
+                          Last Password Changed:
+                        </span>{" "}
+                        <span className="font-medium text-gray-800 dark:text-gray-100">
+                          {passwordCrtDate
+                            ? new Date(passwordCrtDate).toLocaleString()
+                            : "Never changed"}
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                  <div className="mt-2">
-                    {passwordCrtDate ? (
-                      <PasswordPriorityBadge
-                        ageDays={getPasswordAgeDays(passwordCrtDate)}
-                      />
-                    ) : (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2.5 py-0.5 text-xs font-semibold text-orange-700">
-                        Password has never been changed — consider updating
-                      </span>
-                    )}
+                    <div className="mt-2">
+                      {passwordCrtDate ? (
+                        <PasswordPriorityBadge
+                          ageDays={getPasswordAgeDays(passwordCrtDate)}
+                        />
+                      ) : (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2.5 py-0.5 text-xs font-semibold text-orange-700">
+                          Password has never been changed — consider updating
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
-          </FormSection>
+              )}
+            </FormSection>
+          )}
 
           <FormSection
             title={
@@ -1771,135 +1884,31 @@ export default function CustomerCreationForm() {
               "Address & Location Information"
             }
           >
-            {/* INDIVIDUAL HOUSE */}
-            {isIndividual && (
-              <>
-                {showField("building_no") && (
-                  <FormInput
-                    label={t("common.building_no") || "Building No"}
-                    value={formData.building_no}
-                    onChange={(e) => update("building_no", e.target.value)}
-                    placeholder="e.g., 13A"
-                  />
-                )}
-                {showField("street") && (
-                  <FormInput
-                    label={t("common.street") || "Street"}
-                    value={formData.street}
-                    onChange={(e) => update("street", e.target.value)}
-                    placeholder="e.g., Main Street"
-                    isRequired={false}
-                  />
-                )}
-                {showField("area") && (
-                  <FormInput
-                    label={t("common.area") || "Area"}
-                    value={formData.area}
-                    onChange={(e) => update("area", e.target.value)}
-                    placeholder="e.g., Village Center"
-                    isRequired={false}
-                  />
-                )}
-              </>
+            {showField("building_no") && (
+              <FormInput
+                label={t("common.building_no") || "Building / Shop No"}
+                value={formData.building_no}
+                onChange={(e) => update("building_no", e.target.value)}
+                placeholder="e.g., 13A or Shop 12"
+              />
             )}
-
-            {/* APARTMENT */}
-            {isApartment && (
-              <>
-                {showField("apartment_name") && (
-                  <FormInput
-                    label="Apartment Name"
-                    value={formData.apartment_name}
-                    onChange={(e) => update("apartment_name", e.target.value)}
-                    placeholder="Enter apartment name"
-                    isRequired={false}
-                  />
-                )}
-                {showField("block_no") && (
-                  <FormInput
-                    label="Block No"
-                    value={formData.block_no}
-                    onChange={(e) => update("block_no", e.target.value)}
-                    placeholder="Enter block number"
-                    isRequired={false}
-                  />
-                )}
-                {showField("flat_no") && (
-                  <FormInput
-                    label="Flat No"
-                    value={formData.flat_no}
-                    onChange={(e) => update("flat_no", e.target.value)}
-                    placeholder="Enter flat number"
-                    isRequired={false}
-                  />
-                )}
-              </>
+            {showField("street") && (
+              <FormInput
+                label={t("common.street") || "Street"}
+                value={formData.street}
+                onChange={(e) => update("street", e.target.value)}
+                placeholder="e.g., Main Street"
+                isRequired={false}
+              />
             )}
-
-            {/* VILLA */}
-            {isVilla && (
-              <>
-                {showField("street") && (
-                  <FormInput
-                    label={t("common.street") || "Street"}
-                    value={formData.street}
-                    onChange={(e) => update("street", e.target.value)}
-                    placeholder="e.g., Main Street"
-                    isRequired={false}
-                  />
-                )}
-                {showField("area") && (
-                  <FormInput
-                    label={t("common.area") || "Area"}
-                    value={formData.area}
-                    onChange={(e) => update("area", e.target.value)}
-                    placeholder="e.g., Village Center"
-                    isRequired={false}
-                  />
-                )}
-                {showField("villa_no") && (
-                  <FormInput
-                    label="Villa No"
-                    value={formData.villa_no}
-                    onChange={(e) => update("villa_no", e.target.value)}
-                    placeholder="Enter villa number"
-                    isRequired={false}
-                  />
-                )}
-              </>
-            )}
-
-            {/* INDUSTRY */}
-            {isIndustry && (
-              <>
-                {showField("industry_name") && (
-                  <FormInput
-                    label="Industry Name"
-                    value={formData.industry_name}
-                    onChange={(e) => update("industry_name", e.target.value)}
-                    placeholder="Enter industry name"
-                    isRequired={false}
-                  />
-                )}
-                {showField("industry_type") && (
-                  <FormInput
-                    label="Industry Type"
-                    value={formData.industry_type}
-                    onChange={(e) => update("industry_type", e.target.value)}
-                    placeholder="Enter industry type"
-                    isRequired={false}
-                  />
-                )}
-                {showField("area") && (
-                  <FormInput
-                    label={t("common.area") || "Area"}
-                    value={formData.area}
-                    onChange={(e) => update("area", e.target.value)}
-                    placeholder="e.g., Industrial Zone"
-                    isRequired={false}
-                  />
-                )}
-              </>
+            {showField("area") && (
+              <FormInput
+                label={t("common.area") || "Area"}
+                value={formData.area}
+                onChange={(e) => update("area", e.target.value)}
+                placeholder="e.g., Market or Village Center"
+                isRequired={false}
+              />
             )}
 
             {showField("pincode") && (
@@ -2352,182 +2361,195 @@ export default function CustomerCreationForm() {
                   "Select option",
                 )}
                 isRequired={false}
-                disabled={true}
               />
             )}
-            <div className="md:col-span-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-              Bulk waste generator is auto-enabled when Sqft &gt; 20000, water
-              consumption &gt; 40000 L/day, or waste collection &gt; 100 kg/day.
-            </div>
-          </FormSection>
-
-          <FormSection
-            title={
-              t("admin.customer_creation.identification") || "Identification"
-            }
-          >
-            {showField("id_proof_type") && (
-              <ShadcnSelect
-                label={
-                  t("admin.customer_creation.id_proof_type") || "ID Proof Type"
-                }
-                value={formData.id_proof_type}
-                onChange={(v: string) => update("id_proof_type", v)}
-                options={[
-                  {
-                    value: "AADHAAR",
-                    label:
-                      t("admin.customer_creation.id_proof_aadhaar") ||
-                      "Aadhaar",
-                  },
-                  {
-                    value: "VOTER_ID",
-                    label:
-                      t("admin.customer_creation.id_proof_voter") || "Voter ID",
-                  },
-                  {
-                    value: "PAN_CARD",
-                    label:
-                      t("admin.customer_creation.id_proof_pan") || "PAN Card",
-                  },
-                  {
-                    value: "DL",
-                    label:
-                      t("admin.customer_creation.id_proof_dl") ||
-                      "Driving License",
-                  },
-                  {
-                    value: "PASSPORT",
-                    label:
-                      t("admin.customer_creation.id_proof_passport") ||
-                      "Passport",
-                  },
-                ]}
-                placeholder={
-                  t("admin.customer_creation.id_proof_placeholder") ||
-                  "Select ID proof type"
-                }
-                error={fieldErrors.id_proof_type}
-                isRequired={false}
-              />
-            )}
-            {showField("id_no") && (
-              <div className="md:col-span-2">
-                <FormInput
-                  label={t("admin.customer_creation.id_no") || "ID Number"}
-                  value={formData.id_no}
-                  onChange={(e) => update("id_no", e.target.value)}
-                  placeholder="Enter identification number"
-                  error={fieldErrors.id_no}
-                  isRequired={false}
-                />
+            {!formData.is_without_qr && (
+              <div className="md:col-span-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                Bulk waste generator is auto-enabled when Sqft &gt; 20000, water
+                consumption &gt; 40000 L/day, or waste collection &gt; 100
+                kg/day.
               </div>
             )}
-            {showField("member_count") && (
-              <FormInput
-                label="Family Member Count"
-                value={formData.member_count}
-                onChange={(e) =>
-                  syncFamilyMemberCount(e.target.value.replace(/[^0-9]/g, ""))
-                }
-                placeholder="e.g., 4"
-                inputMode="numeric"
-                isRequired={false}
-              />
-            )}
-            {showField("family_members") &&
-              (() => {
-                const maxCount = Number.parseInt(
-                  formData.member_count || "",
-                  10,
-                );
-                const hasMaxCount = !isNaN(maxCount) && maxCount >= 0;
-                const atLimit =
-                  hasMaxCount && formData.family_members.length >= maxCount;
-                return (
-                  <div className="md:col-span-3 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-sm font-medium text-gray-700">
-                        Family Members ID Proof
-                      </Label>
-                      <button
-                        type="button"
-                        onClick={addFamilyMember}
-                        disabled={atLimit}
-                        title={
-                          atLimit
-                            ? "Reached the Family Member Count limit"
-                            : undefined
-                        }
-                        className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400"
-                      >
-                        + Add Member
-                      </button>
-                    </div>
-                    {hasMaxCount && (
-                      <p className="text-xs text-gray-500">
-                        {formData.family_members.length}/{maxCount} member(s)
-                        added — set Family Member Count above to add more rows.
-                      </p>
-                    )}
-                    {formData.family_members.length === 0 && (
-                      <p className="text-sm text-gray-500">
-                        No family members added.
-                      </p>
-                    )}
-                    {formData.family_members.map((member, index) => (
-                      <div
-                        key={index}
-                        className="grid grid-cols-1 gap-3 rounded-md border border-gray-200 p-3 md:grid-cols-[1fr_1fr_1fr_auto]"
-                      >
-                        <Input
-                          value={member.member_name}
-                          onChange={(e) =>
-                            updateFamilyMember(
-                              index,
-                              "member_name",
-                              e.target.value,
-                            )
-                          }
-                          placeholder={`Member ${index + 1} name`}
-                        />
-                        <Select
-                          value={member.id_proof_type || undefined}
-                          onValueChange={(value) =>
-                            updateFamilyMember(index, "id_proof_type", value)
-                          }
-                        >
-                          <SelectTrigger className="w-full">
-                            <SelectValue placeholder="ID proof type" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="AADHAAR">Aadhaar</SelectItem>
-                            <SelectItem value="VOTER_ID">Voter ID</SelectItem>
-                            <SelectItem value="PAN_CARD">PAN Card</SelectItem>
-                            <SelectItem value="DL">Driving License</SelectItem>
-                            <SelectItem value="PASSPORT">Passport</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <Input
-                          value={member.id_no}
-                          onChange={(e) =>
-                            updateFamilyMember(index, "id_no", e.target.value)
-                          }
-                          placeholder="ID number"
-                        />
+          </FormSection>
+
+          {/* Identification — hidden entirely for Without QR */}
+          {!formData.is_without_qr && (
+            <FormSection
+              title={
+                t("admin.customer_creation.identification") || "Identification"
+              }
+            >
+              {showField("id_proof_type") && (
+                <ShadcnSelect
+                  label={
+                    t("admin.customer_creation.id_proof_type") ||
+                    "ID Proof Type"
+                  }
+                  value={formData.id_proof_type}
+                  onChange={(v: string) => update("id_proof_type", v)}
+                  options={[
+                    {
+                      value: "AADHAAR",
+                      label:
+                        t("admin.customer_creation.id_proof_aadhaar") ||
+                        "Aadhaar",
+                    },
+                    {
+                      value: "VOTER_ID",
+                      label:
+                        t("admin.customer_creation.id_proof_voter") ||
+                        "Voter ID",
+                    },
+                    {
+                      value: "PAN_CARD",
+                      label:
+                        t("admin.customer_creation.id_proof_pan") || "PAN Card",
+                    },
+                    {
+                      value: "DL",
+                      label:
+                        t("admin.customer_creation.id_proof_dl") ||
+                        "Driving License",
+                    },
+                    {
+                      value: "PASSPORT",
+                      label:
+                        t("admin.customer_creation.id_proof_passport") ||
+                        "Passport",
+                    },
+                  ]}
+                  placeholder={
+                    t("admin.customer_creation.id_proof_placeholder") ||
+                    "Select ID proof type"
+                  }
+                  error={fieldErrors.id_proof_type}
+                  isRequired={false}
+                />
+              )}
+              {showField("id_no") && (
+                <div className="md:col-span-2">
+                  <FormInput
+                    label={t("admin.customer_creation.id_no") || "ID Number"}
+                    value={formData.id_no}
+                    onChange={(e) => update("id_no", e.target.value)}
+                    placeholder="Enter identification number"
+                    error={fieldErrors.id_no}
+                    isRequired={false}
+                  />
+                </div>
+              )}
+              {isResidentialIndividualHouse && showField("member_count") && (
+                <FormInput
+                  label="Family Member Count"
+                  value={formData.member_count}
+                  onChange={(e) =>
+                    syncFamilyMemberCount(
+                      e.target.value.replace(/[^0-9]/g, ""),
+                    )
+                  }
+                  placeholder="e.g., 4"
+                  inputMode="numeric"
+                  isRequired={false}
+                />
+              )}
+              {isResidentialIndividualHouse &&
+                showField("family_members") &&
+                (() => {
+                  const maxCount = Number.parseInt(
+                    formData.member_count || "",
+                    10,
+                  );
+                  const hasMaxCount = !isNaN(maxCount) && maxCount >= 0;
+                  const atLimit =
+                    hasMaxCount && formData.family_members.length >= maxCount;
+                  return (
+                    <div className="md:col-span-3 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-sm font-medium text-gray-700">
+                          Family Members ID Proof
+                        </Label>
                         <button
                           type="button"
-                          onClick={() => removeFamilyMember(index)}
-                          className="rounded-md bg-red-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-600"
+                          onClick={addFamilyMember}
+                          disabled={atLimit}
+                          title={
+                            atLimit
+                              ? "Reached the Family Member Count limit"
+                              : undefined
+                          }
+                          className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400"
                         >
-                          Remove
+                          + Add Member
                         </button>
                       </div>
-                    ))}
-                  </div>
-                );
-              })()}
-          </FormSection>
+                      {hasMaxCount && (
+                        <p className="text-xs text-gray-500">
+                          {formData.family_members.length}/{maxCount} member(s)
+                          added — set Family Member Count above to add more
+                          rows.
+                        </p>
+                      )}
+                      {formData.family_members.length === 0 && (
+                        <p className="text-sm text-gray-500">
+                          No family members added.
+                        </p>
+                      )}
+                      {formData.family_members.map((member, index) => (
+                        <div
+                          key={index}
+                          className="grid grid-cols-1 gap-3 rounded-md border border-gray-200 p-3 md:grid-cols-[1fr_1fr_1fr_auto]"
+                        >
+                          <Input
+                            value={member.member_name}
+                            onChange={(e) =>
+                              updateFamilyMember(
+                                index,
+                                "member_name",
+                                e.target.value,
+                              )
+                            }
+                            placeholder={`Member ${index + 1} name`}
+                          />
+                          <Select
+                            value={member.id_proof_type || undefined}
+                            onValueChange={(value) =>
+                              updateFamilyMember(index, "id_proof_type", value)
+                            }
+                          >
+                            <SelectTrigger className="w-full">
+                              <SelectValue placeholder="ID proof type" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="AADHAAR">Aadhaar</SelectItem>
+                              <SelectItem value="VOTER_ID">Voter ID</SelectItem>
+                              <SelectItem value="PAN_CARD">PAN Card</SelectItem>
+                              <SelectItem value="DL">
+                                Driving License
+                              </SelectItem>
+                              <SelectItem value="PASSPORT">Passport</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Input
+                            value={member.id_no}
+                            onChange={(e) =>
+                              updateFamilyMember(index, "id_no", e.target.value)
+                            }
+                            placeholder="ID number"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => removeFamilyMember(index)}
+                            className="rounded-md bg-red-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-600"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+            </FormSection>
+          )}
 
           {showField("is_active") && (
             <FormSection title={t("common.status") || "Status"}>

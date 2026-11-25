@@ -410,15 +410,6 @@ const groupByCompanyThenProject = (customers: Customer[]): Customer[] =>
 
 /** Unit / house designation — "Flat No: 301", "No. 47", etc. */
 const stickerUnit = (customer: Customer): string => {
-  const flat = [customer.block_no, customer.flat_no]
-    .map((part) => (part ? String(part).trim() : ""))
-    .filter(Boolean)
-    .join("-");
-  if (flat) return `Flat No: ${flat}`;
-
-  const villa = (customer.villa_no ?? "").trim();
-  if (villa) return `No. ${villa}`;
-
   const building = (customer.building_no ?? "").trim();
   if (building) return `No. ${building}`;
 
@@ -429,8 +420,6 @@ const stickerUnit = (customer: Customer): string => {
 const stickerBuilding = (customer: Customer): string =>
   // Deliberately excludes sub_property_name: that holds the property *type*
   // ("Individual House", "Apartment"), which is noise on a door sticker.
-  (customer.apartment_name ?? "").trim() ||
-  (customer.industry_name ?? "").trim() ||
   (customer.area ?? "").trim() ||
   (customer.street ?? "").trim();
 

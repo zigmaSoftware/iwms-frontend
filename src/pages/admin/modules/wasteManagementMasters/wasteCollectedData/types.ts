@@ -16,6 +16,8 @@ export type Customer = {
   company_unique_id?: string | null;
   project_id?: string | null;
   project_unique_id?: string | null;
+  // Without QR customers are count-only placeholders with no coordinates.
+  is_without_qr?: boolean;
 };
 
 // Same vocabulary as DailyTripHouseholdCollection.STATUS_CHOICES (A5).
@@ -46,6 +48,8 @@ export type WasteCollection = {
   status?: WasteCollectionStatus;
   collection_date?: string;
   collection_time?: string;
+  latitude?: string | number | null;
+  longitude?: string | number | null;
   is_active: boolean;
   company_id?: string | null;
   company_unique_id?: string | null;

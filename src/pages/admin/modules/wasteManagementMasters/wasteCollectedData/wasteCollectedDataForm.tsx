@@ -20,6 +20,8 @@ import { wasteCollectedDataSchema } from "@/schemas/wasteManagementMasters/waste
 import { parseWithSchema, type FieldErrors } from "@/schemas/shared/parseFormErrors";
 import { FieldError } from "@/components/form/FieldError";
 import { FormSelect } from "@/components/common/FormSelect";
+import { AutoDetectLocationButton } from "@/components/common/AutoDetectLocationButton";
+import type { DetectedCoordinates } from "@/utils/geolocation";
 
 
 type WasteTypeOption = { unique_id: string; waste_type_name: string };
@@ -121,6 +123,22 @@ export default function WasteCollectedForm() {
   const [status, setStatus] = useState<WasteCollectionStatus>("Pending");
   const [collectionDate, setCollectionDate] = useState("");
   const [wardId, setWardId] = useState("");
+  const [latitude, setLatitude] = useState("");
+  const [longitude, setLongitude] = useState("");
+  // One photo per waste type (keyed by wet_waste / dry_waste / ...), like the mobile app.
+  const [wasteImageFiles, setWasteImageFiles] = useState<Record<string, File | null>>({});
+  const [existingWasteImageUrls, setExistingWasteImageUrls] = useState<Record<string, string>>({});
+  const wasteImagePreviewUrls = useMemo(() => {
+    const urls: Record<string, string> = {};
+    Object.entries(wasteImageFiles).forEach(([field, file]) => {
+      if (file) urls[field] = URL.createObjectURL(file);
+    });
+    return urls;
+  }, [wasteImageFiles]);
+  useEffect(
+    () => () => { Object.values(wasteImagePreviewUrls).forEach((url) => URL.revokeObjectURL(url)); },
+    [wasteImagePreviewUrls],
+  );
 
   /* ── dropdown / derived data ── */
   const [allCustomers, setAllCustomers] = useState<Customer[]>([]);
@@ -277,6 +295,13 @@ export default function WasteCollectedForm() {
         });
         setStatus((res.status as WasteCollectionStatus) ?? "Pending");
         setCollectionDate(res.collection_date ? String(res.collection_date) : "");
+        setLatitude(res.latitude != null ? String(res.latitude) : "");
+        setLongitude(res.longitude != null ? String(res.longitude) : "");
+        const savedWasteImages: Record<string, string> = {};
+        (Array.isArray(res.waste_images) ? res.waste_images : []).forEach((img: any) => {
+          if (img?.field && img?.url) savedWasteImages[String(img.field)] = String(img.url);
+        });
+        setExistingWasteImageUrls(savedWasteImages);
         const recWardId = String(res.ward_id ?? res.ward?.unique_id ?? "");
         if (recWardId) setWardId(recWardId);
         applyCompanyProjectFromRecord(res as unknown as Record<string, unknown>);
@@ -451,6 +476,18 @@ export default function WasteCollectedForm() {
     (parseFloat(wasteAmounts.sanitary_waste) || 0);
 
   const customerWardName = selectedCustomer?.ward_name || "";
+  // Without QR customers have no location, so collection lat/long is not asked for.
+  const isWithoutQrCustomer = Boolean(selectedCustomer?.is_without_qr);
+
+  const handleLocationDetected = (coordinates: DetectedCoordinates) => {
+    setLatitude(String(coordinates.latitude));
+    setLongitude(String(coordinates.longitude));
+    setFieldErrors((previous) => ({
+      ...previous,
+      latitude: "",
+      longitude: "",
+    }));
+  };
 
   /* ── submit ── */
   const handleSubmit = async (e: React.FormEvent) => {
@@ -480,6 +517,15 @@ export default function WasteCollectedForm() {
       return;
     }
 
+    if (status === "Collected" && !isWithoutQrCustomer && (!latitude || !longitude)) {
+      Swal.fire(
+        t("common.warning"),
+        "Capture the collection latitude and longitude before marking this collection as Collected.",
+        "warning",
+      );
+      return;
+    }
+
     const payload: Record<string, unknown> = {
       company_id_input: companyUniqueId,
       project_id_input: projectId,
@@ -493,15 +539,35 @@ export default function WasteCollectedForm() {
       status,
       collection_date: collectionDate || undefined,
       ward_id: wardId || undefined,
+      latitude: latitude || undefined,
+      longitude: longitude || undefined,
     };
 
     setIsSubmitting(true);
     try {
+      // With a photo the request goes as multipart; otherwise plain JSON as before.
+      let formPayload: FormData | null = null;
+      const imagesToUpload = visibleWasteTypes
+        .map((wt) => ({ wt, field: wasteTypeToField(wt.waste_type_name) }))
+        .filter(({ field }) => field && wasteImageFiles[field]);
+      if (imagesToUpload.length > 0) {
+        formPayload = new FormData();
+        Object.entries(payload).forEach(([key, value]) => {
+          if (value !== undefined && value !== null) formPayload!.append(key, String(value));
+        });
+        imagesToUpload.forEach(({ wt, field }) => {
+          formPayload!.append(`${field}_image`, wasteImageFiles[field!] as File);
+          // Real waste type id only when it came from the trip assignment.
+          if (assignmentWasteTypes.length > 0) formPayload!.append(`${field}_type_id`, wt.unique_id);
+        });
+      }
       if (isEdit && id) {
-        await wasteCollectionApi.update(id, payload);
+        if (formPayload) await wasteCollectionApi.uploadUpdate(id, formPayload);
+        else await wasteCollectionApi.update(id, payload);
         Swal.fire(t("common.success"), t("common.updated_success"), "success");
       } else {
-        await wasteCollectionApi.create(payload);
+        if (formPayload) await wasteCollectionApi.upload(formPayload);
+        else await wasteCollectionApi.create(payload);
         Swal.fire(t("common.success"), t("admin.waste_collected_data.save_success"), "success");
       }
       navigate(LIST_PATH, { state: { companyUniqueId, projectId } });
@@ -592,6 +658,8 @@ export default function WasteCollectedForm() {
                 value={customerId}
                 onChange={(value) => {
                   setCustomerId(value);
+                  setLatitude("");
+                  setLongitude("");
                   setFieldErrors((prev) => ({ ...prev, customer_id: "" }));
                 }}
                 options={customerOptionsWithCurrent}
@@ -607,16 +675,6 @@ export default function WasteCollectedForm() {
               <FieldError message={fieldErrors.customer_id} />
             </div>
 
-            {/* Status — A5 */}
-            <div>
-              <Label>{t("common.status")}</Label>
-              <Select
-                value={status}
-                onChange={(v) => setStatus(v as WasteCollectionStatus)}
-                options={STATUS_OPTIONS}
-                placeholder="Select status"
-              />
-            </div>
 
             {/* Address */}
             <div>
@@ -669,6 +727,39 @@ export default function WasteCollectedForm() {
               <Input disabled className="bg-gray-100" value={customerWardName} />
             </div>
 
+            {!isWithoutQrCustomer && (<>
+            <div>
+              <Label>Collection Latitude</Label>
+              <Input
+                type="number"
+                step="0.000001"
+                value={latitude}
+                onChange={(event) => setLatitude(event.target.value)}
+                placeholder="e.g., 13.082700"
+              />
+              <FieldError message={fieldErrors.latitude} />
+            </div>
+
+            <div>
+              <Label>Collection Longitude</Label>
+              <Input
+                type="number"
+                step="0.000001"
+                value={longitude}
+                onChange={(event) => setLongitude(event.target.value)}
+                placeholder="e.g., 80.270700"
+              />
+              <FieldError message={fieldErrors.longitude} />
+            </div>
+
+            <div className="flex items-end">
+              <AutoDetectLocationButton
+                onDetected={handleLocationDetected}
+                label="Capture collection location"
+              />
+            </div>
+            </>)}
+
           </div>
 
           {/* Waste Type inputs — dynamic based on trip assignment */}
@@ -702,6 +793,32 @@ export default function WasteCollectedForm() {
                       }}
                     />
                     <FieldError message={fieldErrors[field]} />
+                    <Label className="mt-3">{wt.waste_type_name} Image</Label>
+                    <Input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      capture="environment"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0] ?? null;
+                        setWasteImageFiles((prev) => ({ ...prev, [field]: file }));
+                      }}
+                      className="cursor-pointer file:mr-3 file:font-semibold file:text-green-700"
+                    />
+                    {wasteImagePreviewUrls[field] ? (
+                      <img
+                        src={wasteImagePreviewUrls[field]}
+                        alt={`Selected ${wt.waste_type_name}`}
+                        className="mt-2 h-32 w-auto rounded-md border border-gray-200 object-cover"
+                      />
+                    ) : existingWasteImageUrls[field] ? (
+                      <a href={existingWasteImageUrls[field]} target="_blank" rel="noreferrer">
+                        <img
+                          src={existingWasteImageUrls[field]}
+                          alt={wt.waste_type_name}
+                          className="mt-2 h-32 w-auto rounded-md border border-gray-200 object-cover"
+                        />
+                      </a>
+                    ) : null}
                   </div>
                 );
               })}
@@ -711,8 +828,21 @@ export default function WasteCollectedForm() {
                 <Label>{t("admin.waste_collected_data.total_quantity")} (kg)</Label>
                 <Input disabled className="bg-gray-100" value={totalQuantity.toFixed(2)} />
               </div>
+
+              {/* Status — A5 */}
+            <div>
+              <Label>{t("common.status")}</Label>
+              <Select
+                value={status}
+                onChange={(v) => setStatus(v as WasteCollectionStatus)}
+                options={STATUS_OPTIONS}
+                placeholder="Select status"
+              />
+            </div>
+            
             </div>
           </div>
+
 
           <div className="flex justify-end gap-3">
             <button

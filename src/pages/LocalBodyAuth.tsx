@@ -1,5 +1,6 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { lbApi } from "@/api";
 import { useToast } from "@/hooks/use-toast";
 import { Eye, EyeOff, Lock, User, Building2, Leaf, AlertCircle } from "lucide-react";
@@ -21,19 +22,20 @@ export default function LocalBodyAuth() {
 
   const [userInvalid, setUserInvalid] = useState(false);
   const [passInvalid, setPassInvalid] = useState(false);
-  const [passHint, setPassHint] = useState("Enter your password to continue.");
+  const [passHint, setPassHint] = useState("");
   const [shake, setShake] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
+  const { t } = useTranslation();
 
   // Explain an automatic logout (idle timeout / session expiry)
   useEffect(() => {
     const sessionMessage = (location.state as { sessionMessage?: string } | null)?.sessionMessage;
     if (sessionMessage) {
-      toast({ title: "Session Ended", description: sessionMessage });
+      toast({ title: t("login.session_ended"), description: sessionMessage });
       window.history.replaceState({}, "");
     }
   }, []);
@@ -52,7 +54,7 @@ export default function LocalBodyAuth() {
     if (!trimmedUsername || !password) {
       if (!trimmedUsername) setUserInvalid(true);
       if (!password) {
-        setPassHint("Enter your password to continue.");
+        setPassHint("");
         setPassInvalid(true);
       }
       triggerShake();
@@ -79,13 +81,13 @@ export default function LocalBodyAuth() {
         error?.response?.data?.non_field_errors?.[0] ||
         error?.response?.data?.detail ||
         error?.message ||
-        "Invalid credentials";
+        t("login.invalid_credentials");
 
       setPassHint(errorMessage);
       setPassInvalid(true);
       triggerShake();
 
-      toast({ title: "Login Failed", description: errorMessage, variant: "destructive" });
+      toast({ title: t("login.login_failed"), description: errorMessage, variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -97,11 +99,11 @@ export default function LocalBodyAuth() {
 
       <main className="page">
         <section className="left">
-          <a className="brand" href="#" aria-label="Zigma home" onClick={(e) => e.preventDefault()}>
+          <a className="brand" href="#" aria-label={t("login.brand_home")} onClick={(e) => e.preventDefault()}>
             <img src={ZigmaLogo} alt="Zigma IWMS" />
           </a>
 
-          <h1 className="headline">Smart Solutions for a Cleaner, Greener Tomorrow</h1>
+          <h1 className="headline">{t("login.headline")}</h1>
 
           <LoginFeatureChain containerRef={containerRef} />
         </section>
@@ -114,13 +116,13 @@ export default function LocalBodyAuth() {
             </div>
 
             <h2 className="welcome">
-              PLB Leader <em>Login</em>
+              {t("login.localbody.title_lead")} <em>{t("login.localbody.title_accent")}</em>
             </h2>
-            <p className="subtitle">Sign in to access your PLB dashboard</p>
+            <p className="subtitle">{t("login.localbody.subtitle")}</p>
 
             <form onSubmit={handleSignIn} noValidate>
               <div className={`field u${userInvalid ? " invalid" : ""}`}>
-                <label htmlFor="lb-username">Username</label>
+                <label htmlFor="lb-username">{t("login.username")}</label>
                 <div className="control">
                   <span className="lead" aria-hidden="true"><User /></span>
                   <input
@@ -128,7 +130,7 @@ export default function LocalBodyAuth() {
                     name="username"
                     type="text"
                     autoComplete="username"
-                    placeholder="Enter your username"
+                    placeholder={t("login.forgot.username_placeholder")}
                     value={username}
                     onChange={(e: ChangeEvent<HTMLInputElement>) => {
                       setUsername(e.target.value);
@@ -138,12 +140,12 @@ export default function LocalBodyAuth() {
                 </div>
                 <p className="hint" role="alert">
                   <AlertCircle />
-                  <span>Enter your username to continue.</span>
+                  <span>{t("login.localbody.enter_username_hint")}</span>
                 </p>
               </div>
 
               <div className={`field p${passInvalid ? " invalid" : ""}`}>
-                <label htmlFor="lb-password">Password</label>
+                <label htmlFor="lb-password">{t("login.password")}</label>
                 <div className="control">
                   <span className="lead" aria-hidden="true"><Lock /></span>
                   <input
@@ -151,7 +153,7 @@ export default function LocalBodyAuth() {
                     name="password"
                     type={showPassword ? "text" : "password"}
                     autoComplete="current-password"
-                    placeholder="Enter your password"
+                    placeholder={t("login.enter_password_placeholder")}
                     value={password}
                     onChange={(e: ChangeEvent<HTMLInputElement>) => {
                       setPassword(e.target.value);
@@ -162,7 +164,7 @@ export default function LocalBodyAuth() {
                     type="button"
                     className="reveal"
                     aria-pressed={showPassword}
-                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    aria-label={showPassword ? t("login.hide_password") : t("login.show_password")}
                     onClick={() => setShowPassword((v) => !v)}
                   >
                     {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -170,7 +172,7 @@ export default function LocalBodyAuth() {
                 </div>
                 <p className="hint" role="alert">
                   <AlertCircle />
-                  <span>{passHint}</span>
+                  <span>{passHint || t("login.enter_password_hint")}</span>
                 </p>
               </div>
 
@@ -178,7 +180,7 @@ export default function LocalBodyAuth() {
                 <svg className="arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M10 17l5-5-5-5" /><path d="M15 12H3" />
                 </svg>
-                <span className="label">Sign In</span>
+                <span className="label">{t("login.sign_in")}</span>
                 <svg className="spinner" viewBox="0 0 24 24" aria-hidden="true">
                   <circle cx="12" cy="12" r="9" />
                   <path d="M21 12a9 9 0 0 0-9-9" />
@@ -188,7 +190,7 @@ export default function LocalBodyAuth() {
 
             <p className="footnote">
               <Leaf aria-hidden="true" />
-              Zigma IWMS · Local Body Portal
+              {t("login.localbody.portal")}
             </p>
           </div>
         </section>

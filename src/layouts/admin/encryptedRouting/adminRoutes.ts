@@ -47,7 +47,6 @@ const UserTypeList = lazy(() => import("@/pages/admin/modules/superadmin/roleMan
 const UserTypeForm = lazy(() => import("@/pages/admin/modules/superadmin/roleManagement/userType/user-typeForm"));
 const CustomerCreationList = lazy(() => import("@/pages/admin/modules/masters/customerMasters/customerCreations/customerCreationListPage"));
 const CustomerCreationForm = lazy(() => import("@/pages/admin/modules/masters/customerMasters/customerCreations/customerCreationForm"));
-const ApartmentListPage = lazy(() => import("@/pages/admin/modules/masters/customerMasters/customerCreations/apartmentListpage"));
 const HouseholdPickupEventList = lazy(() => import("@/pages/admin/modules/masters/customerMasters/householdPickupEvent/householdPickupEventList"));
 const HouseholdPickupEventForm = lazy(() => import("@/pages/admin/modules/masters/customerMasters/householdPickupEvent/householdPickupEventForm"));
 const TripSummary = lazy(() => import("@/pages/admin/modules/reports/tripsummary/tripsummary"));
@@ -316,7 +315,6 @@ export const ROUTES: RouteMap = {
       list: CustomerCreationList,
       form: CustomerCreationForm,
     },
-    "apartment-list": { list: ApartmentListPage },
     "customer-access-configuration": { list: CustomerAccessConfigList },
     "household-pickup-event": {
       list: HouseholdPickupEventList,

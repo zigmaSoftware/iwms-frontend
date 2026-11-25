@@ -63,11 +63,12 @@ export default function StaffTemplateList() {
 
   const statusFilter = useOptionFilter({
     param: "status",
-    label: "Status",
+    label: t("common.status"),
     options: [
-      { label: "Active", value: "ACTIVE" },
-      { label: "Inactive", value: "INACTIVE" },
+      { label: t("common.active"), value: "ACTIVE" },
+      { label: t("common.inactive"), value: "INACTIVE" },
     ],
+    allLabel: t("common.all"),
     onAppliedChange: resetPage,
   });
 

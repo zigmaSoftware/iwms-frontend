@@ -80,8 +80,6 @@ const toRecordList = (value: unknown): Customer[] => {
 const CUSTOMER_CREATION_COLUMN_FIELDS: Record<string, string[]> = {
   customer_name: ["customer_name", "name"],
   contact_no: ["contact_no", "mobile"],
-  apartment_name: ["apartment_name"],
-  unit: ["block_no", "flat_no"],
   ward_name: ["ward_id", "ward_name"],
   zone_name: ["zone_id", "zone_name"],
   city_name: ["city_id", "city_name"],
@@ -194,9 +192,6 @@ const CUSTOMER_BULK_TEMPLATE_COLUMNS: ExcelTemplateColumn[] = [
     notes: "Comma-separated waste type names as shown in Waste Type master.",
   },
   { field: "member_count", header: "member_count", sample: "4" },
-  { field: "apartment_name", header: "apartment_name", sample: "Sunrise Apt" },
-  { field: "block_no", header: "block_no", sample: "A" },
-  { field: "flat_no", header: "flat_no", sample: "101" },
   {
     field: "panchayat_name",
     header: "panchayat_name",
@@ -269,6 +264,17 @@ export default function CustomerCreationListPage() {
     onAppliedChange: resetPage,
   });
 
+  // With QR / Without QR → `?is_without_qr=false|true`.
+const qrFilter = useOptionFilter({
+  param: "is_without_qr",
+  label: t("admin.customer_creation.qr_type", { defaultValue: "QR Type" }),
+  options: [
+    { label: t("admin.customer_creation.with_qr", { defaultValue: "With QR" }), value: "false" },
+    { label: t("admin.customer_creation.without_qr", { defaultValue: "Without QR" }), value: "true" },
+  ],
+  onAppliedChange: resetPage,
+});
+
   const { newPath: ENC_NEW_PATH, editPath: ENC_EDIT_PATH } =
     createCrudRoutePaths(encCustomerMaster, encCustomerCreation);
 
@@ -280,12 +286,15 @@ export default function CustomerCreationListPage() {
 
   const activeStatusParam = statusFilter.value;
 
+  const qrTypeParam = qrFilter.value;
+
   // ── Load data (server-side pagination) ──────────────────────────────────
   const loadRows = async (
     page: number,
     limit: number,
     search: string,
     activeStatus: string,
+    qrType: string,
     orderingParam?: string,
   ) => {
     const requestId = ++requestIdRef.current;
@@ -296,6 +305,7 @@ export default function CustomerCreationListPage() {
       if (projectId) params.project_id = projectId;
       if (search) params.search = search;
       if (activeStatus) params.active_status = activeStatus;
+      if (qrType) params.is_without_qr = qrType;
       if (orderingParam) params.ordering = orderingParam;
 
       const response = await customerCreationApi.readAllwithPaginated(
@@ -347,6 +357,7 @@ export default function CustomerCreationListPage() {
       rowsPerPage,
       globalSearchTerm,
       activeStatusParam,
+      qrTypeParam,
       ordering,
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -361,6 +372,7 @@ export default function CustomerCreationListPage() {
     rowsPerPage,
     globalSearchTerm,
     activeStatusParam,
+    qrTypeParam,
     ordering,
   ]);
 
@@ -382,9 +394,6 @@ export default function CustomerCreationListPage() {
     }, 400);
     return () => clearTimeout(timeout);
   }, [globalFilterValue]);
-
-  const cap = (str?: string) =>
-    str ? str.charAt(0).toUpperCase() + str.slice(1).toLowerCase() : "";
 
   const onSearchValueChange = (value: string) => setGlobalFilterValue(value);
 
@@ -501,6 +510,7 @@ export default function CustomerCreationListPage() {
     if (projectId) params.project_id = projectId;
     if (globalSearchTerm) params.search = globalSearchTerm;
     if (activeStatusParam) params.active_status = activeStatusParam;
+    if (qrTypeParam) params.is_without_qr = qrTypeParam;
 
     const response = await customerCreationApi.readAllForExport({ params });
     // waste_types comes back as an array of objects, which the Excel writer
@@ -615,7 +625,7 @@ export default function CustomerCreationListPage() {
   );
 
   const filterPanel = showCol("is_active")
-    ? combineFilters(companyProject, statusFilter)
+    ? combineFilters(companyProject, statusFilter, qrFilter)
     : combineFilters(companyProject);
 
   const qrTemplate = (customer: Customer) => {
@@ -826,9 +836,6 @@ export default function CustomerCreationListPage() {
             "customer_id",
             "customer_name",
             "contact_no",
-            "apartment_name",
-            "block_no",
-            "flat_no",
             "ward_name",
             "zone_name",
             "city_name",
@@ -884,31 +891,6 @@ export default function CustomerCreationListPage() {
               />
             )}
           />
-          {(showCol("apartment_name") || showCol("unit")) && (
-            <Column
-              field="apartment_name"
-              header="Apartment"
-              style={{ width: "16%" }}
-              body={(row: Customer) => (
-                <StackCell
-                  primary={
-                    showCol("apartment_name") &&
-                    row.apartment_name &&
-                    row.apartment_name.trim() !== "" &&
-                    cap(row.apartment_name)
-                  }
-                  lines={[
-                    showCol("unit") &&
-                      row.block_no &&
-                      row.flat_no && {
-                        label: "Unit",
-                        value: `${row.block_no}-${row.flat_no}`,
-                      },
-                  ]}
-                />
-              )}
-            />
-          )}
           {locationColumn<Customer>({
             header: t("common.location"),
             style: { width: "16%" },

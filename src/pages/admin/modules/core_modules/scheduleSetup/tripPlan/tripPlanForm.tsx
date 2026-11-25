@@ -166,6 +166,8 @@ const emptyFormState = (): FormState => ({
   approval_status: "PENDING",
   status: "ACTIVE",
   collection_type: "bin_collection",
+  include_with_qr: true,
+  include_without_qr: true,
 });
 
 const resetFormSelections = (
@@ -288,6 +290,8 @@ export default function TripPlanForm() {
       approval_status: record.approval_status ?? "PENDING",
       status: record.status ?? "ACTIVE",
       collection_type: (record.collection_type as StopRow["collection_type"]) ?? "bin_collection",
+      include_with_qr: record.include_with_qr !== false,
+      include_without_qr: record.include_without_qr !== false,
     });
     const mode = record.collection_type ?? "bin_collection";
     if (mode === "household_collection" || mode === "bulk_waste_collection") {
@@ -638,8 +642,9 @@ export default function TripPlanForm() {
   // Preview of who the backend will auto-assign for Household/Bulk mode —
   // mirrors the same geo scope (panchayat/zone, narrowed by ward) the
   // customer dropdown already uses, plus the household-vs-bulk split via
-  // is_bulkwaste_generator. Informational only; the actual expansion
-  // happens server-side at daily-trip-generation time.
+  // is_bulkwaste_generator. In Household mode it is further narrowed by the
+  // With QR / Without QR checkboxes. Informational only; the actual
+  // expansion happens server-side at daily-trip-generation time.
   const autoAssignCustomers = useMemo(() => {
     if (formData.collection_type === "bin_collection") return [];
     const wantBulk = formData.collection_type === "bulk_waste_collection";
@@ -651,6 +656,11 @@ export default function TripPlanForm() {
 
     return customers.filter((item) => {
       if (Boolean(item?.is_bulkwaste_generator) !== wantBulk) return false;
+      if (formData.collection_type === "household_collection") {
+        const isWithoutQr = Boolean(item?.is_without_qr);
+        if (isWithoutQr && !formData.include_without_qr) return false;
+        if (!isWithoutQr && !formData.include_with_qr) return false;
+      }
       if (formData.panchayat_id) {
         if (!relationMatches(
           item?.panchayat_id ?? item?.panchayat ?? { panchayat_name: item?.panchayat_name, name: item?.panchayat_name },
@@ -674,7 +684,7 @@ export default function TripPlanForm() {
       }
       return true;
     });
-  }, [companyUniqueId, projectId, formData.collection_type, formData.panchayat_id, formData.zone_id, formData.ward_ids, lookups]);
+  }, [companyUniqueId, projectId, formData.collection_type, formData.include_with_qr, formData.include_without_qr, formData.panchayat_id, formData.zone_id, formData.ward_ids, lookups]);
 
   const binOptionsFor = (collectionPointId: string, currentBinId: string = "") => {
     const normalizedWasteTypeIds = formData.waste_type_ids.map((v: any) =>
@@ -852,6 +862,8 @@ export default function TripPlanForm() {
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
+    const triggerWeightValue = formData.trip_trigger_weight_kg.trim();
+    const maxCapacityValue = formData.max_vehicle_capacity_kg.trim();
     const triggerWeight = Number(formData.trip_trigger_weight_kg);
     const maxCapacity = Number(formData.max_vehicle_capacity_kg);
     const isAutoAssignMode = formData.collection_type !== "bin_collection";
@@ -893,7 +905,29 @@ export default function TripPlanForm() {
       Swal.fire(t("common.warning"), "At least one ward is required.", "warning");
       return;
     }
+    if (
+      formData.collection_type === "household_collection" &&
+      !formData.include_with_qr &&
+      !formData.include_without_qr
+    ) {
+      Swal.fire(t("common.warning"), "Select With QR, Without QR, or both.", "warning");
+      return;
+    }
+    if (!triggerWeightValue || !maxCapacityValue) {
+      setFieldErrors((current) => ({
+        ...current,
+        ...(!triggerWeightValue ? { trip_trigger_weight_kg: "Trigger weight is required." } : {}),
+        ...(!maxCapacityValue ? { max_vehicle_capacity_kg: "Vehicle capacity is required." } : {}),
+      }));
+      Swal.fire(t("common.warning"), "Enter both trigger weight and vehicle capacity.", "warning");
+      return;
+    }
     if (!Number.isFinite(triggerWeight) || !Number.isFinite(maxCapacity) || triggerWeight >= maxCapacity) {
+      setFieldErrors((current) => ({
+        ...current,
+        trip_trigger_weight_kg: "Must be lower than vehicle capacity.",
+        max_vehicle_capacity_kg: "Must be greater than trigger weight.",
+      }));
       Swal.fire(t("common.warning"), "Trigger weight must be less than vehicle capacity.", "warning");
       return;
     }
@@ -912,6 +946,9 @@ export default function TripPlanForm() {
     // catch-all stop (no customer_id) that the backend expands to every
     // matching customer in the plan's ward/panchayat scope at daily-trip-
     // generation time (see run_for_date / sync_daily_assignment_stops_from_plan).
+    // For household mode, include_with_qr / include_without_qr (spread in
+    // from formData) narrow that expansion to With QR and/or Without QR
+    // customers.
     const payload = {
       company_id_input: companyUniqueId,
       project_id_input: projectId,
@@ -1060,8 +1097,8 @@ export default function TripPlanForm() {
               <FieldError message={fieldErrors.waste_type_ids} />
             </div>
             <div><Label>Start Time</Label><Input type="time" value={formData.scheduled_time} onChange={(e) => setField("scheduled_time")(e.target.value)} disabled={!projectId} /><FieldError message={fieldErrors.scheduled_time} /></div>
-            <div><Label>Trigger Weight (kg)</Label><Input type="number" min={0} value={formData.trip_trigger_weight_kg} onChange={(e) => setField("trip_trigger_weight_kg")(e.target.value)} /></div>
-            <div><Label>Max Vehicle Capacity (kg)</Label><Input type="number" min={0} value={formData.max_vehicle_capacity_kg} onChange={(e) => setField("max_vehicle_capacity_kg")(e.target.value)} /></div>
+            <div><Label>Max Vehicle Capacity (kg)</Label><Input type="number" min={1} required value={formData.max_vehicle_capacity_kg} onChange={(e) => setField("max_vehicle_capacity_kg")(e.target.value)} /><FieldError message={fieldErrors.max_vehicle_capacity_kg} /></div>
+            <div><Label>Trigger Weight (kg)</Label><Input type="number" min={0} required value={formData.trip_trigger_weight_kg} onChange={(e) => setField("trip_trigger_weight_kg")(e.target.value)} /><FieldError message={fieldErrors.trip_trigger_weight_kg} /></div>
             <div><Label>Status</Label><Select value={formData.status} onChange={setField("status")} options={statusOptions} disabled={loading} /></div>
             <div><Label>Approval Status</Label><Select value={formData.approval_status} onChange={setField("approval_status")} options={approvalStatusOptions} disabled={loading} /></div>
           </div>
@@ -1090,28 +1127,49 @@ export default function TripPlanForm() {
               </div>
             </div>
 
-            {formData.collection_type === "bulk_waste_collection" ? (
-              <div className="rounded-md border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
-                Bulk waste stops are generated automatically for bulk-waste-generator customers under
-                this Trip Plan's ward/panchayat scope — no manual stop list is needed here.
-                {(formData.panchayat_id || formData.zone_id) && (
-                  <span className="ml-1 font-semibold text-green-700">
-                    {autoAssignCustomers.length} matching customer{autoAssignCustomers.length === 1 ? "" : "s"} found.
-                  </span>
-                )}
-              </div>
-            ) : formData.collection_type === "household_collection" ? (
+            {formData.collection_type !== "bin_collection" ? (
               <div className="space-y-3">
+                {formData.collection_type === "household_collection" && (
+                  <div className="flex flex-wrap items-center gap-6 rounded-md border border-gray-200 bg-gray-50 px-4 py-3">
+                    <span className="text-sm font-medium text-gray-700">Customer type</span>
+                    <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-700">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 accent-green-600"
+                        checked={formData.include_with_qr}
+                        onChange={(e) =>
+                          setFormData((prev) => ({ ...prev, include_with_qr: e.target.checked }))
+                        }
+                      />
+                      With QR
+                    </label>
+                    <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-700">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 accent-green-600"
+                        checked={formData.include_without_qr}
+                        onChange={(e) =>
+                          setFormData((prev) => ({ ...prev, include_without_qr: e.target.checked }))
+                        }
+                      />
+                      Without QR
+                    </label>
+                    {!formData.include_with_qr && !formData.include_without_qr && (
+                      <span className="text-xs text-red-600">Select at least one.</span>
+                    )}
+                  </div>
+                )}
+
                 <div className="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-gray-700">
                   {formData.panchayat_id || formData.zone_id ? (
                     <>
                       <span className="font-semibold text-green-700">
-                        All {autoAssignCustomers.length} household customer{autoAssignCustomers.length === 1 ? "" : "s"}
+                        All {autoAssignCustomers.length} {formData.collection_type === "bulk_waste_collection" ? "bulk-waste-generator" : "household"} customer{autoAssignCustomers.length === 1 ? "" : "s"}
                       </span>{" "}
                       in this ward/local body will be auto-assigned as stops for this trip — no manual list needed.
                     </>
                   ) : (
-                    "Select a Zone or PLB (Panchayat) first — every household customer under it will be auto-assigned as a stop."
+                    `Select a Zone or PLB (Panchayat) first — every ${formData.collection_type === "bulk_waste_collection" ? "bulk-waste-generator" : "household"} customer under it will be auto-assigned as a stop.`
                   )}
                 </div>
 
@@ -1129,6 +1187,7 @@ export default function TripPlanForm() {
                           <tr>
                             <th className="px-4 py-2 font-medium">#</th>
                             <th className="px-4 py-2 font-medium">Customer</th>
+                            <th className="px-4 py-2 font-medium">QR</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1136,6 +1195,7 @@ export default function TripPlanForm() {
                             <tr key={recordId(customer) || index} className="border-t border-gray-100">
                               <td className="px-4 py-2 text-gray-500">{index + 1}</td>
                               <td className="px-4 py-2 text-gray-700">{customer?.customer_name ?? customer?.name ?? recordId(customer)}</td>
+                              <td className="px-4 py-2 text-gray-500">{customer?.is_without_qr ? "Without QR" : "With QR"}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -1247,7 +1307,7 @@ export default function TripPlanForm() {
             </button>
           </div>
 
-          
+
         </form>
       </ComponentCard>
     </div>

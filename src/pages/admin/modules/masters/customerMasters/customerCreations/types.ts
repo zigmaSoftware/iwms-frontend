@@ -5,32 +5,6 @@ export type CustomerCreationRecord = {
   [key: string]: unknown;
 };
 
-export type ApartmentRow = {
-  apartment_name: string;
-  total_users: number;
-  total_blocks: number;
-  total_flats: number;
-  qr_code?: string;
-};
-
-export type BlockRow = {
-  block: string;
-  flat_count: number;
-};
-
-export type FlatRow = {
-  flat_no: string;
-  user_count: number;
-};
-
-export type UserRow = {
-  customer_name: string;
-  contact_no: string;
-  flat_no: string;
-};
-
-export type ViewLevel = "apartment" | "block" | "flat" | "user";
-
 export type Option = { value: string; label: string };
 
 export type FamilyMember = {
@@ -73,16 +47,8 @@ export interface FormDataType {
   project_id: string;
   is_active: boolean;
   is_bulkwaste_generator: boolean;
-
-  // Apartment fields
-  apartment_name: string;
-  block_no: string;
-  flat_no: string;
-  // Villa fields
-  villa_no: string;
-  // Industry fields
-  industry_name: string;
-  industry_type: string;
+  is_without_qr: boolean;
+  count: number;
 }
 
 export type Customer = {
@@ -99,9 +65,6 @@ export type Customer = {
   username?: string;
   email?: string;
   app_module?: string;
-  villa_no?: string;
-  industry_name?: string;
-  industry_type?: string;
   panchayat_name: string;
   ward_name: string;
   zone_name: string;
@@ -123,9 +86,6 @@ export type Customer = {
   is_active: boolean;
   is_bulkwaste_generator?: boolean;
   qr_code?: string;
-  apartment_name?: string;
-  block_no?: string;
-  flat_no?: string;
   company_id?: string | null;
   company_unique_id?: string | null;
   company_name?: string | null;

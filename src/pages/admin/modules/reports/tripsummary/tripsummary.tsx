@@ -350,7 +350,12 @@ export default function TripSummary() {
     .filter((key) => selection.applied[key] !== defaultSelection[key])
     .map((key) => ({
       key,
-      label: key === "vehicle" ? "Vehicle" : key === "from" ? "From date" : "To date",
+      label:
+        key === "vehicle"
+          ? t("admin.reports.trip_summary.filters.vehicle_id")
+          : key === "from"
+            ? t("admin.reports.trip_summary.filters.from_date")
+            : t("admin.reports.trip_summary.filters.to_date"),
       value: key === "vehicle" ? selection.applied[key] : selection.applied[key].replace("T", " "),
       onRemove: () => applySelection({ ...selection.applied, [key]: defaultSelection[key] }),
     }));
@@ -366,7 +371,7 @@ export default function TripSummary() {
             placeholder={null}
           />
         </FilterSection>
-        <FilterSection label="Date range">
+        <FilterSection label={t("admin.reports.trip_summary.filters.date_range")}>
           <div className="grid grid-cols-2 gap-2">
             <label className="text-xs text-gray-500">
               {t("admin.reports.trip_summary.filters.from_date")}
@@ -446,8 +451,8 @@ export default function TripSummary() {
       <div className="trip-summary-shell">
         <ProjectSelectorBar />
         <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-          <p className="text-base font-medium">GPS API not configured for this project.</p>
-          <p className="text-sm mt-1">Set a GPS API URL in the project settings to enable trip reports.</p>
+          <p className="text-base font-medium">{t("admin.reports.trip_summary.gps_not_configured")}</p>
+          <p className="text-sm mt-1">{t("admin.reports.trip_summary.gps_not_configured_hint")}</p>
         </div>
       </div>
     );
@@ -479,7 +484,7 @@ export default function TripSummary() {
           </p>
           <p>
             <span>{t("admin.reports.trip_summary.summary.trip_distance")}:</span>{" "}
-            {displaySummary.totalTripLength ?? "-"} km
+            {displaySummary.totalTripLength ?? "-"} {t("admin.reports.trip_summary.unit_km")}
           </p>
         </div>
 

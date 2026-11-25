@@ -64,7 +64,7 @@ export const wrapText = (
 export const safeFilename = (value: string): string =>
   value.trim().replace(/[^a-zA-Z0-9_-]+/g, "_").replace(/^_+|_+$/g, "") || "customer";
 
-export type PropertyKind = "individual" | "apartment" | "villa" | "industry" | "other";
+export type PropertyKind = "individual" | "other";
 
 export const propertyKind = (customer: Customer): PropertyKind => {
   const name = `${customer.property_name ?? ""} ${customer.sub_property_name ?? ""}`
@@ -72,36 +72,12 @@ export const propertyKind = (customer: Customer): PropertyKind => {
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
 
-  if (name.includes("apartment")) return "apartment";
-  if (name.includes("villa")) return "villa";
-  if (name.includes("industry") || name.includes("industrial")) return "industry";
   if (name.includes("individual") || name.includes("house")) return "individual";
   return "other";
 };
 
 export const propertySpecificDetails = (customer: Customer): Array<[string, unknown]> => {
   switch (propertyKind(customer)) {
-    case "apartment":
-      return [
-        ["Apartment Name", customer.apartment_name],
-        ["Block No", customer.block_no],
-        ["Flat No", customer.flat_no],
-        ["Apartment Sq. Ft.", customer.sqft],
-      ];
-    case "villa":
-      return [
-        ["Villa No", customer.villa_no],
-        ["Street", customer.street],
-        ["Area", customer.area],
-        ["Villa Sq. Ft.", customer.sqft],
-      ];
-    case "industry":
-      return [
-        ["Industry Name", customer.industry_name],
-        ["Industry Type", customer.industry_type],
-        ["Industrial Area", customer.area],
-        ["Property Sq. Ft.", customer.sqft],
-      ];
     case "individual":
       return [
         ["Building No", customer.building_no],
@@ -125,9 +101,6 @@ export const propertySpecificDetails = (customer: Customer): Array<[string, unkn
 
 export const propertyAddress = (customer: Customer): string => {
   const partsByKind: Record<PropertyKind, unknown[]> = {
-    apartment: [customer.apartment_name, customer.block_no, customer.flat_no, customer.pincode],
-    villa: [customer.villa_no, customer.street, customer.area, customer.pincode],
-    industry: [customer.industry_name, customer.industry_type, customer.area, customer.pincode],
     individual: [customer.building_no, customer.street, customer.area, customer.pincode],
     other: [customer.building_no, customer.street, customer.area, customer.pincode],
   };

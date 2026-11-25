@@ -66,7 +66,7 @@ export default function WasteSummary() {
       ? [
           {
             key: "month",
-            label: "Month",
+            label: t("admin.reports.waste_summary.filters.month"),
             value: monthFilter.applied.month,
             onRemove: () => monthFilter.commit({ month: initialMonth }),
           },
@@ -74,14 +74,14 @@ export default function WasteSummary() {
       : [];
   const monthFilterPart: FilterPart = {
     field: (
-      <FilterSection label="Month">
+      <FilterSection label={t("admin.reports.waste_summary.filters.month")}>
         <input
           type="month"
           value={monthFilter.draft.month}
           max={initialMonth}
           onChange={(e) => monthFilter.setField("month", e.target.value)}
           className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-          aria-label="Month"
+          aria-label={t("admin.reports.waste_summary.filters.month")}
         />
       </FilterSection>
     ),
@@ -415,10 +415,10 @@ export default function WasteSummary() {
         <ProjectSelectorBar />
         <div className="flex flex-col items-center justify-center py-20 text-gray-400">
           <p className="text-base font-medium">
-            Weighment API URL is not configured for this project.
+            {t("admin.reports.waste_summary.weighment_not_configured")}
           </p>
           <p className="text-sm mt-1">
-            Set the Weighment API URL in the project settings.
+            {t("admin.reports.waste_summary.weighment_not_configured_hint")}
           </p>
         </div>
       </div>
@@ -514,7 +514,7 @@ export default function WasteSummary() {
           )}
         />
         <Column
-          header="Waste Split"
+          header={t("admin.reports.waste_summary.columns.waste_split")}
           style={{ width: "22%" }}
           body={(r) => (
             <StackCell

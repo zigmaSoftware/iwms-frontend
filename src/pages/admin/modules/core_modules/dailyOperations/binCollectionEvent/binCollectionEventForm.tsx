@@ -26,13 +26,6 @@ import { FormSelect } from "@/components/common/FormSelect";
 import { PageLoader } from "@/components/ui/PageLoader";
 
 
-// A5: BinCollectionEvent.STATUS_CHOICES.
-const STATUS_OPTIONS: SelectOption[] = [
-  { value: "Collected", label: "Collected" },
-  { value: "Not Collected", label: "Not Collected" },
-  { value: "Collect Later", label: "Collect Later" },
-];
-
 const extractError = (error: any): string | null => {
   const data = error?.response?.data;
   if (!data) return null;
@@ -44,6 +37,21 @@ const extractError = (error: any): string | null => {
     if (typeof first === "string") return first;
   }
   return null;
+};
+
+const extractFieldErrors = (error: unknown): FieldErrors => {
+  const data = (error as { response?: { data?: unknown } })?.response?.data;
+  if (!data || typeof data !== "object" || Array.isArray(data)) return {};
+
+  return Object.fromEntries(
+    Object.entries(data)
+      .filter(([, value]) => Array.isArray(value) || typeof value === "string")
+      .map(([field, value]) => [
+        field,
+        Array.isArray(value) ? String(value[0] ?? "") : value,
+      ])
+      .filter(([, message]) => message),
+  );
 };
 
 const stopIdOf = (stop: any): string =>
@@ -104,6 +112,26 @@ const binTypeLabelOf = (source: any, fallback = ""): string =>
     fallback,
   );
 
+const MAX_COLLECTION_DISTANCE_METERS = 10;
+
+const distanceInMeters = (
+  fromLatitude: number,
+  fromLongitude: number,
+  toLatitude: number,
+  toLongitude: number,
+): number => {
+  const earthRadiusMeters = 6_371_000;
+  const toRadians = (degrees: number) => (degrees * Math.PI) / 180;
+  const latitudeDelta = toRadians(toLatitude - fromLatitude);
+  const longitudeDelta = toRadians(toLongitude - fromLongitude);
+  const haversine =
+    Math.sin(latitudeDelta / 2) ** 2 +
+    Math.cos(toRadians(fromLatitude)) *
+      Math.cos(toRadians(toLatitude)) *
+      Math.sin(longitudeDelta / 2) ** 2;
+  return 2 * earthRadiusMeters * Math.asin(Math.sqrt(haversine));
+};
+
 const isStopCollected = (stop: any): boolean =>
   Boolean(stop?.is_collected) ||
   String(stop?.status ?? stop?.collection_status ?? "").toLowerCase() === "collected";
@@ -111,14 +139,14 @@ const isStopCollected = (stop: any): boolean =>
 const isCollectedEvent = (event: any): boolean =>
   String(event?.status ?? "Collected").toLowerCase() === "collected";
 
-const collectionPointStopLabel = (stop: any, fallback = ""): string => {
+const collectionPointStopLabel = (stop: any, fallback = "", collectedLabel = "Collected"): string => {
   const collectionPointLabel = collectionPointLabelOf(stop, fallback);
   const binTypeLabel = binTypeLabelOf(stop, binLabelOf(stop));
   const baseLabel = binTypeLabel
     ? `${collectionPointLabel} - ${binTypeLabel}`
     : collectionPointLabel;
 
-  return isStopCollected(stop) ? `${baseLabel} (Collected)` : baseLabel;
+  return isStopCollected(stop) ? `${baseLabel} (${collectedLabel})` : baseLabel;
 };
 
 export default function BinCollectionEventForm() {
@@ -128,6 +156,14 @@ export default function BinCollectionEventForm() {
   const location = useLocation();
   const routeState = location.state as { companyUniqueId?: string; projectId?: string } | null;
   const isEdit = Boolean(id);
+  const statusOptions = useMemo<SelectOption[]>(
+    () => [
+      { value: "Collected", label: t("admin.bin_collection_event.status_values.collected") },
+      { value: "Not Collected", label: t("admin.bin_collection_event.status_values.not_collected") },
+      { value: "Collect Later", label: t("admin.bin_collection_event.status_values.collect_later") },
+    ],
+    [t],
+  );
 
   const {
     companyUniqueId, projectId, projects, companies,
@@ -382,12 +418,12 @@ export default function BinCollectionEventForm() {
             is_collected: isCollected,
             status: isCollected ? "Collected" : "Pending",
             collection_status: isCollected ? "Collected" : "Pending",
-          }, value),
+          }, value, t("admin.bin_collection_event.status_values.collected")),
           disabled: isCollected && !isCurrent,
         };
       })
       .filter((option) => option.value),
-    [rawTripCPs, currentStopId, eventCollectedByStopId, eventCollectedByBinId]
+    [rawTripCPs, currentStopId, eventCollectedByStopId, eventCollectedByBinId, t]
   );
 
   const collectionPointOptionsWithCurrent = useMemo(() => {
@@ -399,11 +435,11 @@ export default function BinCollectionEventForm() {
     return [
       {
         value: currentStopId,
-        label: collectionPointStopLabel(record, currentStopId),
+        label: collectionPointStopLabel(record, currentStopId, t("admin.bin_collection_event.status_values.collected")),
       },
       ...collectionPointOptions,
     ];
-  }, [collectionPointOptions, currentStopId, isEdit, record]);
+  }, [collectionPointOptions, currentStopId, isEdit, record, t]);
 
   /* ── Selected stop → its bin, shown read-only. For grouped collection
      points, choosing the point selects the next uncollected bin stop. ── */
@@ -445,8 +481,12 @@ export default function BinCollectionEventForm() {
     setFieldErrors((prev) => ({ ...prev, bin_id: "" }));
   };
 
-  const set = (field: keyof FormState) => (value: string) =>
+  const set = (field: keyof FormState) => (value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
+    setFieldErrors((prev) =>
+      prev[field] ? { ...prev, [field]: "" } : prev,
+    );
+  };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -455,17 +495,42 @@ export default function BinCollectionEventForm() {
       bin_id: form.bin_id,
       status: form.status,
       collected_weight_kg: form.collected_weight_kg,
+      driver_latitude: form.driver_latitude,
+      driver_longitude: form.driver_longitude,
     });
     if (!validation.success) {
       setFieldErrors(validation.errors);
       Swal.fire(
         t("common.warning"),
-        validation.errors.trip_assignment_id ??
+          validation.errors.trip_assignment_id ??
           validation.errors.bin_id ??
           validation.errors.collected_weight_kg ??
-          "Trip Assignment and Bin are required.",
+          validation.errors.driver_latitude ??
+          validation.errors.driver_longitude ??
+          "Trip Assignment, Bin, and GPS coordinates are required.",
         "warning",
       );
+      return;
+    }
+
+    const collectionPoint = selectedStop?.collection_point;
+    const collectionPointLatitude = Number(collectionPoint?.latitude);
+    const collectionPointLongitude = Number(collectionPoint?.longitude);
+    const capturedLatitude = Number(form.driver_latitude);
+    const capturedLongitude = Number(form.driver_longitude);
+    if (
+      Number.isFinite(collectionPointLatitude) &&
+      Number.isFinite(collectionPointLongitude) &&
+      distanceInMeters(
+        collectionPointLatitude,
+        collectionPointLongitude,
+        capturedLatitude,
+        capturedLongitude,
+      ) > MAX_COLLECTION_DISTANCE_METERS
+    ) {
+      const message = `Captured location must be within ${MAX_COLLECTION_DISTANCE_METERS} m of the collection point.`;
+      setFieldErrors({ driver_latitude: message });
+      Swal.fire(t("common.warning"), message, "warning");
       return;
     }
     setFieldErrors({});
@@ -501,6 +566,8 @@ export default function BinCollectionEventForm() {
       }
       navigate(LIST_PATH, { state: { companyUniqueId, projectId } });
     } catch (err: any) {
+      const apiFieldErrors = extractFieldErrors(err);
+      if (Object.keys(apiFieldErrors).length) setFieldErrors(apiFieldErrors);
       Swal.fire(t("common.error"), extractError(err) ?? t("common.save_failed_desc"), "error");
     } finally {
       setSaving(false);
@@ -512,12 +579,12 @@ export default function BinCollectionEventForm() {
   }
 
   const title = isEdit
-    ? `Edit Secondary Bin Collection Event${record?.unique_id ? ` — ${record.unique_id}` : ""}`
-    : "Add Secondary Bin Collection Event";
+    ? `${t("admin.bin_collection_event.title_edit")}${record?.unique_id ? ` — ${record.unique_id}` : ""}`
+    : t("admin.bin_collection_event.title_add");
 
   return (
     <div className="p-4 space-y-4">
-      <ComponentCard title={title} desc={isEdit ? "Update the bin collection scan record" : "Record a bin collection scan event manually"}>
+      <ComponentCard title={title} desc={isEdit ? t("admin.bin_collection_event.subtitle_edit") : t("admin.bin_collection_event.subtitle_add")}>
         <form onSubmit={handleSubmit} className="space-y-5">
 
           {/* Company / Project */}
@@ -539,7 +606,7 @@ export default function BinCollectionEventForm() {
                 onChange={(v) => setProjectId(v)}
                 options={projects}
                 disabled={!companyUniqueId || projects.length === 0}
-                placeholder={companyUniqueId ? t("common.select_item_placeholder", { item: t("admin.nav.project") }) : "Select a company first"}
+                placeholder={companyUniqueId ? t("common.select_item_placeholder", { item: t("admin.nav.project") }) : t("admin.bin_collection_event.select_company_first")}
               />
             </div>
           </div>
@@ -548,7 +615,7 @@ export default function BinCollectionEventForm() {
               (bin-collection-type) trip assignments are selectable. */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label>Collection Date</Label>
+              <Label>{t("admin.bin_collection_event.collection_date")}</Label>
               <Input
                 type="date"
                 value={form.collection_date}
@@ -559,7 +626,7 @@ export default function BinCollectionEventForm() {
               />
             </div>
             <div>
-              <Label>Trip Assignment <span className="text-red-500">*</span></Label>
+              <Label>{t("admin.bin_collection_event.trip_assignment")} <span className="text-red-500">*</span></Label>
               <Select
                 options={filteredAssignmentOptions}
                 value={form.trip_assignment_id}
@@ -567,7 +634,7 @@ export default function BinCollectionEventForm() {
                   setForm((prev) => ({ ...prev, trip_assignment_id: v, trip_collection_point_id: "", bin_id: "" }));
                   setFieldErrors((prev) => ({ ...prev, trip_assignment_id: "" }));
                 }}
-                placeholder={fetchingDropdowns ? "Loading..." : "Select Trip Assignment"}
+                placeholder={fetchingDropdowns ? t("admin.bin_collection_event.loading_assignments") : t("admin.bin_collection_event.select_trip_assignment")}
                 disabled={fetchingDropdowns || !projectId}
               />
               <FieldError message={fieldErrors.trip_assignment_id} />
@@ -578,12 +645,12 @@ export default function BinCollectionEventForm() {
               selected Trip Assignment's location. */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label>District</Label>
-              <Input disabled className="bg-gray-100" value={derivedDistrictName} placeholder="Select a trip assignment" />
+              <Label>{t("common.district")}</Label>
+              <Input disabled className="bg-gray-100" value={derivedDistrictName} placeholder={t("admin.bin_collection_event.select_trip_assignment")} />
             </div>
             <div>
-              <Label>City</Label>
-              <Input disabled className="bg-gray-100" value={derivedCityName} placeholder="Select a trip assignment" />
+              <Label>{t("common.city")}</Label>
+              <Input disabled className="bg-gray-100" value={derivedCityName} placeholder={t("admin.bin_collection_event.select_trip_assignment")} />
             </div>
           </div>
 
@@ -593,25 +660,25 @@ export default function BinCollectionEventForm() {
               currently saved on this record). */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label>Collection Point</Label>
+              <Label>{t("admin.bin_collection_event.collection_point")}</Label>
               <Select
                 options={collectionPointOptionsWithCurrent}
                 value={form.trip_collection_point_id}
                 onChange={handleCollectionPointChange}
                 placeholder={
-                  loadingCPs ? "Loading..." :
-                  form.trip_assignment_id ? "Select Collection Point" : "Select assignment first"
+                  loadingCPs ? t("admin.bin_collection_event.loading") :
+                  form.trip_assignment_id ? t("admin.bin_collection_event.select_collection_point") : t("admin.bin_collection_event.select_assignment_first")
                 }
                 disabled={!form.trip_assignment_id || loadingCPs}
               />
             </div>
             <div>
-              <Label>Bin <span className="text-red-500">*</span></Label>
+              <Label>{t("admin.bin_collection_event.bin")} <span className="text-red-500">*</span></Label>
               <Select
                 options={binOptions}
                 value={form.bin_id}
                 onChange={set("bin_id")}
-                placeholder="Select a collection point"
+                placeholder={t("admin.bin_collection_event.select_collection_point")}
                 disabled
               />
               <FieldError message={fieldErrors.bin_id} />
@@ -623,11 +690,11 @@ export default function BinCollectionEventForm() {
           {isEdit && (record?.ward_name || record?.zone_name) && (
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label>Ward</Label>
+                <Label>{t("common.ward")}</Label>
                 <Input disabled className="bg-gray-100" value={record?.ward_name ?? ""} />
               </div>
               <div>
-                <Label>Zone</Label>
+                <Label>{t("common.zone")}</Label>
                 <Input
                   disabled
                   className="bg-gray-100"
@@ -644,9 +711,9 @@ export default function BinCollectionEventForm() {
           {/* Row: Status + Collected Weight */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label>Status <span className="text-red-500">*</span></Label>
+              <Label>{t("common.status")} <span className="text-red-500">*</span></Label>
               <Select
-                options={STATUS_OPTIONS}
+                options={statusOptions}
                 value={form.status}
                 onChange={(v) =>
                   setForm((prev) => ({
@@ -655,12 +722,12 @@ export default function BinCollectionEventForm() {
                     collected_weight_kg: v === "Collected" ? prev.collected_weight_kg : "",
                   }))
                 }
-                placeholder="Select status"
+                placeholder={t("common.select_status")}
               />
             </div>
             <div>
               <Label>
-                Collected Weight (kg)
+                {t("admin.bin_collection_event.weight_kg")}
                 {form.status === "Collected" && <span className="text-red-500"> *</span>}
               </Label>
               <Input
@@ -672,7 +739,7 @@ export default function BinCollectionEventForm() {
                   set("collected_weight_kg")(e.target.value);
                   setFieldErrors((prev) => ({ ...prev, collected_weight_kg: "" }));
                 }}
-                placeholder="e.g. 12.5"
+                placeholder={t("admin.bin_collection_event.weight_example")}
                 disabled={form.status !== "Collected"}
                 required={form.status === "Collected"}
               />
@@ -683,11 +750,11 @@ export default function BinCollectionEventForm() {
           {/* Status Reason — required context for Not Collected / Collect Later */}
           {form.status !== "Collected" && (
             <div>
-              <Label>Status Reason</Label>
+              <Label>{t("admin.bin_collection_event.status_reason")}</Label>
               <Input
                 value={form.status_reason}
                 onChange={(e) => set("status_reason")(e.target.value)}
-                placeholder="e.g. Bin inaccessible, vehicle breakdown..."
+                placeholder={t("admin.bin_collection_event.status_reason_placeholder")}
               />
             </div>
           )}
@@ -695,11 +762,13 @@ export default function BinCollectionEventForm() {
           {/* GPS */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label>GPS Latitude</Label>
+              <Label>{t("admin.bin_collection_event.gps_latitude")} <span className="text-red-500">*</span></Label>
               <div className="flex items-center gap-2">
                 <Input
                   type="number"
                   step="any"
+                  min={-90}
+                  max={90}
                   value={form.driver_latitude}
                   onChange={(e) => set("driver_latitude")(e.target.value)}
                   placeholder="e.g. 11.1271"
@@ -709,31 +778,35 @@ export default function BinCollectionEventForm() {
                     set("driver_latitude")(String(latitude));
                     set("driver_longitude")(String(longitude));
                   }}
-                  label="Detect"
+                  label={t("admin.bin_collection_event.detect")}
                   className="shrink-0 whitespace-nowrap"
-                  title="Auto-detect current GPS coordinates"
+                  title={t("admin.bin_collection_event.detect_title")}
                 />
               </div>
+              <FieldError message={fieldErrors.driver_latitude} />
             </div>
             <div>
-              <Label>GPS Longitude</Label>
+              <Label>{t("admin.bin_collection_event.gps_longitude")} <span className="text-red-500">*</span></Label>
               <Input
                 type="number"
                 step="any"
+                min={-180}
+                max={180}
                 value={form.driver_longitude}
                 onChange={(e) => set("driver_longitude")(e.target.value)}
                 placeholder="e.g. 78.6569"
               />
+              <FieldError message={fieldErrors.driver_longitude} />
             </div>
           </div>
 
           <div>
-            <Label>Notes</Label>
+            <Label>{t("admin.bin_collection_event.notes")}</Label>
             <textarea
               value={form.notes}
               onChange={(e) => set("notes")(e.target.value)}
               rows={3}
-              placeholder="Optional notes..."
+              placeholder={t("admin.bin_collection_event.notes_placeholder")}
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>

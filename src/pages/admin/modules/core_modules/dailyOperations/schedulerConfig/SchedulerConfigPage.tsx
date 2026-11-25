@@ -54,7 +54,7 @@ export default function SchedulerConfigPage() {
       setConfig(cfgRes.data);
       setStatus(stRes.data);
     } catch {
-      Notify.fire({ title: "Failed to load scheduler data", icon: "error" });
+      Notify.fire({ title: t("admin.scheduler_config.load_failed"), icon: "error" });
     } finally {
       setLoading(false);
     }
@@ -66,7 +66,7 @@ export default function SchedulerConfigPage() {
       const res = await api.get(statusUrl);
       setStatus(res.data);
     } catch {
-      Notify.fire({ title: "Failed to refresh status", icon: "error" });
+      Notify.fire({ title: t("admin.scheduler_config.refresh_failed"), icon: "error" });
     } finally {
       setRefreshing(false);
     }
@@ -75,7 +75,7 @@ export default function SchedulerConfigPage() {
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     if (!config.run_time) {
-      Notify.fire({ title: "Please enter a valid time", icon: "warning" });
+      Notify.fire({ title: t("admin.scheduler_config.invalid_time"), icon: "warning" });
       return;
     }
     setSaving(true);
@@ -85,12 +85,12 @@ export default function SchedulerConfigPage() {
         is_enabled: config.is_enabled,
       });
       setConfig(res.data);
-      Notify.fire({ title: "Scheduler time updated successfully", icon: "success" });
+      Notify.fire({ title: t("admin.scheduler_config.update_success"), icon: "success" });
       // refresh status to reflect updated next_run_at
       const stRes = await api.get(statusUrl);
       setStatus(stRes.data);
     } catch {
-      Notify.fire({ title: "Failed to update scheduler config", icon: "error" });
+      Notify.fire({ title: t("admin.scheduler_config.update_failed"), icon: "error" });
     } finally {
       setSaving(false);
     }
@@ -104,7 +104,7 @@ export default function SchedulerConfigPage() {
     return (
       <div className="flex items-center justify-center py-20 text-gray-500 gap-2">
         <Loader2 className="w-5 h-5 animate-spin" />
-        <span>Loading scheduler config…</span>
+        <span>{t("admin.scheduler_config.loading")}</span>
       </div>
     );
   }
@@ -119,20 +119,20 @@ export default function SchedulerConfigPage() {
           <Clock className="w-5 h-5" />
         </div>
         <div>
-          <h2 className="text-lg font-semibold text-gray-800">Daily Trip Auto-Generation Scheduler</h2>
+          <h2 className="text-lg font-semibold text-gray-800">{t("admin.scheduler_config.title")}</h2>
           <p className="text-sm text-gray-500">
-            Configure the cron-like time when daily trip records are generated every day (IST).
+            {t("admin.scheduler_config.subtitle")}
           </p>
         </div>
       </div>
 
       {/* Config Form */}
-      <ComponentCard title="Schedule Settings">
+      <ComponentCard title={t("admin.scheduler_config.schedule_settings")}>
         <form onSubmit={handleSave} className="space-y-5">
           {/* Time picker */}
           <div className="space-y-2">
             <Label className="text-sm font-medium text-gray-700">
-              Auto Generation Time (IST) <span className="text-red-500">*</span>
+              {t("admin.scheduler_config.auto_generation_time_ist")} <span className="text-red-500">*</span>
             </Label>
             <input
               type="time"
@@ -142,7 +142,7 @@ export default function SchedulerConfigPage() {
               className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
             <p className="text-xs text-gray-400">
-              This is not the trip start time. It only controls when daily trip records are created.
+              {t("admin.scheduler_config.time_hint")}
             </p>
           </div>
 
@@ -164,7 +164,7 @@ export default function SchedulerConfigPage() {
               />
             </button>
             <Label className="text-sm font-medium text-gray-700 cursor-pointer select-none">
-              {config.is_enabled ? "Scheduler Enabled" : "Scheduler Disabled"}
+              {config.is_enabled ? t("admin.scheduler_config.enabled") : t("admin.scheduler_config.disabled")}
             </Label>
           </div>
 
@@ -179,7 +179,7 @@ export default function SchedulerConfigPage() {
               ) : (
                 <Save className="w-4 h-4" />
               )}
-              {saving ? "Saving…" : "Save Changes"}
+              {saving ? t("common.saving") : t("admin.scheduler_config.save_changes")}
             </button>
           </div>
         </form>
@@ -187,8 +187,8 @@ export default function SchedulerConfigPage() {
 
       {/* Live Status */}
       <ComponentCard
-        title="Current Scheduler Status"
-        desc="Live state of the background scheduler process"
+        title={t("admin.scheduler_config.current_status")}
+        desc={t("admin.scheduler_config.current_status_desc")}
       >
         <div className="flex justify-end -mt-2">
           <button
@@ -198,42 +198,42 @@ export default function SchedulerConfigPage() {
             className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-blue-600 transition-colors"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin" : ""}`} />
-            Refresh
+            {t("admin.scheduler_config.refresh")}
           </button>
         </div>
 
         {status ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <StatusRow
-              label="Status"
+              label={t("common.status")}
               value={
                 status.is_running ? (
                   <span className="inline-flex items-center gap-1 text-blue-600 font-medium">
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> Running
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> {t("admin.scheduler_config.running")}
                   </span>
                 ) : status.enabled ? (
                   <span className="inline-flex items-center gap-1 text-green-600 font-medium">
-                    <CheckCircle className="w-3.5 h-3.5" /> Active
+                    <CheckCircle className="w-3.5 h-3.5" /> {t("common.active")}
                   </span>
                 ) : (
                   <span className="inline-flex items-center gap-1 text-gray-500 font-medium">
-                    <AlertCircle className="w-3.5 h-3.5" /> Disabled
+                    <AlertCircle className="w-3.5 h-3.5" /> {t("admin.scheduler_config.status_disabled")}
                   </span>
                 )
               }
             />
-            <StatusRow label="Auto Generation Time" value={status.run_time || "—"} />
-            <StatusRow label="Next Run At (IST)" value={formatDatetime(status.next_run_at)} />
-            <StatusRow label="Last Run At (IST)" value={formatDatetime(status.last_run_at)} />
+            <StatusRow label={t("admin.scheduler_config.auto_generation_time")} value={status.run_time || "—"} />
+            <StatusRow label={t("admin.scheduler_config.next_run_at")} value={formatDatetime(status.next_run_at)} />
+            <StatusRow label={t("admin.scheduler_config.last_run_at")} value={formatDatetime(status.last_run_at)} />
             {lastResult && (
               <>
-                <StatusRow label="Trips Created" value={String(lastResult.created ?? "—")} />
-                <StatusRow label="Trips Skipped" value={String(lastResult.skipped ?? "—")} />
+                <StatusRow label={t("admin.scheduler_config.trips_created")} value={String(lastResult.created ?? "—")} />
+                <StatusRow label={t("admin.scheduler_config.trips_skipped")} value={String(lastResult.skipped ?? "—")} />
               </>
             )}
             {status.last_error && (
               <div className="col-span-2">
-                <p className="text-xs font-medium text-gray-500 mb-1">Last Error</p>
+                <p className="text-xs font-medium text-gray-500 mb-1">{t("admin.scheduler_config.last_error")}</p>
                 <p className="text-sm text-red-600 bg-red-50 rounded px-3 py-2 break-words">
                   {status.last_error}
                 </p>
@@ -241,7 +241,7 @@ export default function SchedulerConfigPage() {
             )}
           </div>
         ) : (
-          <p className="text-sm text-gray-400">No status available.</p>
+          <p className="text-sm text-gray-400">{t("admin.scheduler_config.no_status")}</p>
         )}
       </ComponentCard>
     </div>

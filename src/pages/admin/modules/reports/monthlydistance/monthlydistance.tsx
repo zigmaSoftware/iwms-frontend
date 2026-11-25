@@ -138,7 +138,7 @@ export default function MonthlyDistance() {
       ? [
           {
             key: "month",
-            label: "Month",
+            label: t("admin.reports.monthly_distance.filters.month"),
             value: monthFilter.applied.month,
             onRemove: () => monthFilter.commit({ month: defaultMonth }),
           },
@@ -146,13 +146,13 @@ export default function MonthlyDistance() {
       : [];
   const monthFilterPart: FilterPart = {
     field: (
-      <FilterSection label="Month">
+      <FilterSection label={t("admin.reports.monthly_distance.filters.month")}>
         <input
           type="month"
           value={monthFilter.draft.month}
           onChange={(e) => monthFilter.setField("month", e.target.value)}
           className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-          aria-label="Month"
+          aria-label={t("admin.reports.monthly_distance.filters.month")}
         />
       </FilterSection>
     ),
@@ -191,6 +191,23 @@ export default function MonthlyDistance() {
       ? formatter.format(new Date(y, m - 1, 1))
       : "";
   }, [i18n.language, selectedMonth]);
+
+  // Day column headers in the active language (en keeps the en-GB "01-Jan" style).
+  const dayLabels = useMemo(() => {
+    const lang = i18n.language || "en";
+    const formatter = new Intl.DateTimeFormat(lang.startsWith("en") ? "en-GB" : lang, {
+      day: "2-digit",
+      month: "short",
+      timeZone: "Asia/Kolkata",
+    });
+    const map: Record<string, string> = {};
+    const [y, m] = selectedMonth.split("-").map(Number);
+    monthDays.forEach((d, i) => {
+      map[d.iso] =
+        y && m ? formatter.format(new Date(y, m - 1, i + 1)).replace(" ", "-") : d.label;
+    });
+    return map;
+  }, [i18n.language, monthDays, selectedMonth]);
 
   /* ================= LOAD VEHICLES ================= */
 
@@ -355,12 +372,12 @@ export default function MonthlyDistance() {
         [exportLabels.vehicle]: r.vehicleId,
       };
       monthDays.forEach((d) => {
-        rec[d.label] = formatCellValue(r.distances[d.iso]);
+        rec[dayLabels[d.iso] ?? d.label] = formatCellValue(r.distances[d.iso]);
       });
       rec[exportLabels.total] = formatCellValue(r.total);
       return rec;
     }),
-    [exportLabels, filteredRows, monthDays],
+    [dayLabels, exportLabels, filteredRows, monthDays],
   );
 
   /* ================= UI ================= */
@@ -370,8 +387,8 @@ export default function MonthlyDistance() {
       <div className="p-3">
         <ProjectSelectorBar />
         <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-          <p className="text-base font-medium">GPS API not configured for this project.</p>
-          <p className="text-sm mt-1">Set a GPS API URL in the project settings to enable distance reports.</p>
+          <p className="text-base font-medium">{t("admin.reports.monthly_distance.gps_not_configured")}</p>
+          <p className="text-sm mt-1">{t("admin.reports.monthly_distance.gps_not_configured_hint")}</p>
         </div>
       </div>
     );
@@ -383,7 +400,7 @@ export default function MonthlyDistance() {
         <div className="flex justify-between items-center mb-6">
           <div>
             <h1 className="text-3xl font-bold">
-              {t("admin.reports.monthly_distance.title")} (KM)
+              {t("admin.reports.monthly_distance.title_with_unit")}
             </h1>
             <p className="text-sm text-gray-500">{monthHeadline}</p>
           </div>
@@ -450,7 +467,7 @@ export default function MonthlyDistance() {
           {monthDays.map((d) => (
             <Column
               key={d.iso}
-              header={d.label}
+              header={dayLabels[d.iso] ?? d.label}
               body={(r: VehicleDistanceRow) =>
                 formatCellValue(r.distances[d.iso])
               }

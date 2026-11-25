@@ -9,12 +9,8 @@ import {
   SelectValue,
 } from "../components/ui/select";
 import { cn } from "@/lib/utils";
-import {
-  isLanguageLoaded,
-  loadLocale,
-  markLanguageLoaded,
-  type LanguageCode,
-} from "@/locales";
+import type { LanguageCode } from "@/locales";
+import { switchLanguage } from "@/i18n";
 
 const LANGUAGES: Array<{ value: LanguageCode; labelKey: string }> = [
   { value: "en", labelKey: "common.language_en" },
@@ -60,14 +56,7 @@ export const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({
   );
 
   const setLang = (lang: LanguageCode) => {
-    void (async () => {
-      if (!isLanguageLoaded(lang)) {
-        const bundle = await loadLocale(lang);
-        i18n.addResourceBundle(lang, "translation", bundle.translation, true, true);
-        markLanguageLoaded(lang);
-      }
-      await i18n.changeLanguage(lang);
-    })();
+    void switchLanguage(lang);
   };
 
   if (variant === "select") {

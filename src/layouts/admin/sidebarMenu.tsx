@@ -57,7 +57,6 @@ const {
   encUserType,
   encCustomerMaster,
   encCustomerCreation,
-  encApartmentList,
   encReport,
   encMonthlyDistance,
   encTripSummary,
@@ -516,11 +515,6 @@ export const customerMasters: NavItem[] = [
         nameKey: "admin.nav.customer_creation",
         path: `/${encCustomerMaster}/${encCustomerCreation}`,
         ...permissionFor("customers", "customercreations"),
-      },
-      {
-        nameKey: "admin.nav.apartment_list",
-        path: `/${encCustomerMaster}/${encApartmentList}`,
-        ...permissionFor("customers", "apartment-list"),
       },
       {
         nameKey: "admin.nav.customer_access_configuration",
