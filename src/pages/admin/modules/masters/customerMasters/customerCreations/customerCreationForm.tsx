@@ -1353,6 +1353,16 @@ export default function CustomerCreationForm() {
   const isResidentialIndividualHouse =
     isResidentialProperty &&
     (subName.includes("individual") || subName.includes("house"));
+
+  // "Without QR" is only offered for Residential -> Individual House. Once
+  // the sub property is known and it is anything else, force "With QR".
+  // (Waits for the sub property to resolve so an edit doesn't reset the
+  // saved value while dropdowns are still loading.)
+  useEffect(() => {
+    if (selectedSubProperty && !isResidentialIndividualHouse && formData.is_without_qr) {
+      setFormData((prev) => ({ ...prev, is_without_qr: false, count: 1 }));
+    }
+  }, [selectedSubProperty, isResidentialIndividualHouse, formData.is_without_qr]);
   const visibleWasteTypes = useMemo(
     () =>
       dropdowns.wasteTypes.filter((wasteType: any) => {
@@ -1607,6 +1617,7 @@ export default function CustomerCreationForm() {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {isResidentialIndividualHouse && (
           <div className="mb-4 grid grid-cols-1 gap-6 md:grid-cols-3">
             <ShadcnSelect
               label={tOrFallback("admin.customer_creation.qr_option", "QR Option")}
@@ -1655,6 +1666,7 @@ export default function CustomerCreationForm() {
               />
             )}
           </div>
+          )}
           <FormSection
             title={
               t("admin.customer_creation.company_project_info") ||
