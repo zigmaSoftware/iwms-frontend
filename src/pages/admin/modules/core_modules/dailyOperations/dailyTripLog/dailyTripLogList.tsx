@@ -299,6 +299,7 @@ type CollectionType = "all" | "bin" | "household" | "bulk";
 
 /* ── client-side "bin vs household" post-filter ── */
 const matchesCollectionType = (row: DailyTripLogRecord, collectionType: CollectionType): boolean => {
+  if (collectionType === "all") return true;
   if (collectionType === "bin") {
     const cps = row.collection_points ?? [];
     const hasPointWeights = cps.some(

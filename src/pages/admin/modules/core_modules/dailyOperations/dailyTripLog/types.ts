@@ -68,13 +68,16 @@ export type DailyTripLogRecord = {
   wards_detail?: { unique_id?: string; ward_name?: string }[];
   collection_points?: {
     unique_id?: string;
+    trip_collection_point_id?: string;
     cp_name?: string;
     sequence?: number;
     is_collected?: boolean;
     status?: string;
     collected_weight_kg?: string | number | null;
     waste_type_breakdown?: WasteTypeBreakdownItem[];
+    collected_at?: string | null;
     capture_images?: TripLogCaptureImage[];
+    status_evidence_image_url?: string | null;
   }[];
   waste_type?: NamedRef & { waste_type_name?: string };
   waste_types_detail?: { unique_id?: string; waste_type_name?: string }[];

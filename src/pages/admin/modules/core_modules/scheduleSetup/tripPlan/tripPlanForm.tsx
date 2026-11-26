@@ -29,12 +29,6 @@ const statusOptions: SelectOption[] = [
   { value: "INACTIVE", label: "Inactive" },
 ];
 
-const approvalStatusOptions: SelectOption[] = [
-  { value: "PENDING", label: "Pending" },
-  { value: "APPROVED", label: "Approved" },
-  { value: "REJECTED", label: "Rejected" },
-];
-
 const collectionModeOptions: SelectOption[] = [
   { value: "bin_collection", label: "Secondary Stops (Manual)" },
   { value: "household_collection", label: "Household (Auto)" },
@@ -163,7 +157,9 @@ const emptyFormState = (): FormState => ({
   scheduled_time: "",
   is_auto_assign: false,
   repeat_days: [],
-  approval_status: "PENDING",
+  // Approval workflow removed from the UI — plans are saved as approved so the
+  // daily trip scheduler / assignment screens (which require APPROVED) pick them up.
+  approval_status: "APPROVED",
   status: "ACTIVE",
   collection_type: "bin_collection",
   include_with_qr: true,
@@ -287,7 +283,7 @@ export default function TripPlanForm() {
       scheduled_time: String(record.scheduled_time ?? "").slice(0, 5),
       is_auto_assign: Boolean(record.is_auto_assign),
       repeat_days: Array.isArray(record.repeat_days) ? record.repeat_days.map((d: any) => Number(d)) : [],
-      approval_status: record.approval_status ?? "PENDING",
+      approval_status: "APPROVED",
       status: record.status ?? "ACTIVE",
       collection_type: (record.collection_type as StopRow["collection_type"]) ?? "bin_collection",
       include_with_qr: record.include_with_qr !== false,
@@ -301,10 +297,10 @@ export default function TripPlanForm() {
       setStops([autoAssignStop(mode)]);
     } else {
       const stopRows: StopRow[] = normalizeList(record.plan_collection_points).map((stop: any, index: number) => ({
-        collection_type: "bin_collection" as const,
+        collection_type: (stop.collection_type as StopRow["collection_type"]) ?? "bin_collection",
         collection_point_id: stop.collection_point_id ?? stop.collection_point?.unique_id ?? "",
         bin_id: stop.bin_id ?? stop.bin?.unique_id ?? "",
-        customer_id: "",
+        customer_id: stop.customer_id ?? stop.customer?.unique_id ?? "",
         sequence: Number(stop.sequence ?? index + 1),
         is_active: stop.is_active !== false,
       }));
@@ -587,20 +583,15 @@ export default function TripPlanForm() {
         }),
         ["ward_name", "name"]
       ),
+      // A vehicle / staff template can run several trip plans (multiple trips
+      // a day), and plans are usually set up a day ahead — so having a daily
+      // trip today must not block picking them here.
       staffTemplates: buildOptions(
-        scopedItems(lookups.staffTemplates ?? [], companyUniqueId, projectId).map((item) =>
-          item?.is_assigned_today
-            ? { ...item, label: `${optionLabel(item, ["display_code"])} (Assigned)`, disabled: true }
-            : item
-        ),
+        scopedItems(lookups.staffTemplates ?? [], companyUniqueId, projectId),
         ["display_code"]
       ),
       vehicles: buildOptions(
-        scopedItems(lookups.vehicles ?? [], companyUniqueId, projectId).map((item) =>
-          item?.is_assigned_today
-            ? { ...item, label: `${optionLabel(item, ["vehicle_no"])} (Assigned)`, disabled: true }
-            : item
-        ),
+        scopedItems(lookups.vehicles ?? [], companyUniqueId, projectId),
         ["vehicle_no"]
       ),
       staff: buildOptions(
@@ -645,22 +636,14 @@ export default function TripPlanForm() {
   // is_bulkwaste_generator. In Household mode it is further narrowed by the
   // With QR / Without QR checkboxes. Informational only; the actual
   // expansion happens server-side at daily-trip-generation time.
-  const autoAssignCustomers = useMemo(() => {
-    if (formData.collection_type === "bin_collection") return [];
-    const wantBulk = formData.collection_type === "bulk_waste_collection";
+  const autoAssignCustomersByMode = useMemo(() => {
     const customers = scopedItems(lookups.customers ?? [], companyUniqueId, projectId);
     const panchayats = scopedItems(lookups.panchayats ?? [], companyUniqueId, projectId);
     const zones = scopedItems(lookups.zones ?? [], companyUniqueId, projectId);
     const selectedPanchayat = panchayats.find((p) => recordId(p) === formData.panchayat_id);
     const selectedZone = zones.find((z) => recordId(z) === formData.zone_id);
 
-    return customers.filter((item) => {
-      if (Boolean(item?.is_bulkwaste_generator) !== wantBulk) return false;
-      if (formData.collection_type === "household_collection") {
-        const isWithoutQr = Boolean(item?.is_without_qr);
-        if (isWithoutQr && !formData.include_without_qr) return false;
-        if (!isWithoutQr && !formData.include_with_qr) return false;
-      }
+    const inScope = customers.filter((item) => {
       if (formData.panchayat_id) {
         if (!relationMatches(
           item?.panchayat_id ?? item?.panchayat ?? { panchayat_name: item?.panchayat_name, name: item?.panchayat_name },
@@ -684,6 +667,13 @@ export default function TripPlanForm() {
       }
       return true;
     });
+    return {
+      household: inScope.filter((item) => {
+        if (Boolean(item?.is_bulkwaste_generator)) return false;
+        return item?.is_without_qr ? formData.include_without_qr : formData.include_with_qr;
+      }),
+      bulk: inScope.filter((item) => Boolean(item?.is_bulkwaste_generator)),
+    };
   }, [companyUniqueId, projectId, formData.collection_type, formData.include_with_qr, formData.include_without_qr, formData.panchayat_id, formData.zone_id, formData.ward_ids, lookups]);
 
   const binOptionsFor = (collectionPointId: string, currentBinId: string = "") => {
@@ -784,15 +774,20 @@ export default function TripPlanForm() {
     // Household/Bulk mode has no manual stop rows to reset — the auto-assign
     // scope just follows the new zone/panchayat/ward automatically via the
     // autoAssignCustomers memo. Only Bin mode's manual rows need clearing.
-    if ((field === "panchayat_id" || field === "zone_id") && formData.collection_type === "bin_collection") {
-      setStops([emptyStop(1)]);
+    if ((field === "panchayat_id" || field === "zone_id") && stops.some((stop) => stop.collection_type === "bin_collection")) {
+      setStops((current) => current.map((stop) =>
+        stop.collection_type === "bin_collection"
+          ? { ...stop, collection_point_id: "", bin_id: "" }
+          : stop,
+      ));
     }
   };
 
-  const handleCollectionModeChange = (value: string) => {
-    const mode = value as StopRow["collection_type"];
-    setFormData((prev) => ({ ...prev, collection_type: mode }));
-    if (mode === "household_collection") {
+  const collectionModes = Array.from(new Set(stops.map((stop) => stop.collection_type)));
+
+  const handleCollectionModesChange = (values: string[]) => {
+    const modes = values as StopRow["collection_type"][];
+    if (modes.includes("household_collection")) {
       const householdTypes = (lookups.wasteTypes ?? [])
         .filter((wt) => HOUSEHOLD_WASTE_TYPE_NAMES.includes(String(wt?.waste_type_name ?? wt?.name ?? "").trim()))
         .map((wt) => recordId(wt))
@@ -810,14 +805,21 @@ export default function TripPlanForm() {
         }
         return { ...prev, waste_type_ids: householdTypes };
       });
-      setStops([autoAssignStop(mode)]);
-    } else if (mode === "bulk_waste_collection") {
-      setStops([autoAssignStop(mode)]);
-    } else {
-      setStops((current) =>
-        current.some((s) => s.collection_type === "bin_collection") ? current : [emptyStop(1)]
-      );
     }
+    setFormData((prev) => ({ ...prev, collection_type: modes[0] ?? "bin_collection" }));
+    setStops((current) => {
+      const retained = current.filter((stop) => modes.includes(stop.collection_type));
+      const next = [...retained];
+      if (modes.includes("bin_collection") && !next.some((stop) => stop.collection_type === "bin_collection")) {
+        next.push(emptyStop(next.length + 1));
+      }
+      for (const mode of ["household_collection", "bulk_waste_collection"] as const) {
+        if (modes.includes(mode) && !next.some((stop) => stop.collection_type === mode)) {
+          next.push({ ...autoAssignStop(mode), sequence: next.length + 1 });
+        }
+      }
+      return next.map((stop, index) => ({ ...stop, sequence: index + 1 }));
+    });
   };
 
   const setStop = (index: number, patch: Partial<StopRow>) => {
@@ -866,10 +868,11 @@ export default function TripPlanForm() {
     const maxCapacityValue = formData.max_vehicle_capacity_kg.trim();
     const triggerWeight = Number(formData.trip_trigger_weight_kg);
     const maxCapacity = Number(formData.max_vehicle_capacity_kg);
-    const isAutoAssignMode = formData.collection_type !== "bin_collection";
-    const validStops = isAutoAssignMode
-      ? [autoAssignStop(formData.collection_type as "household_collection" | "bulk_waste_collection")]
-      : stops.filter((stop) => Boolean(stop.collection_point_id && stop.bin_id));
+    const validStops = stops.filter((stop) =>
+      stop.collection_type === "bin_collection"
+        ? Boolean(stop.collection_point_id && stop.bin_id)
+        : true,
+    );
 
     const fieldValues = {
       district_id: formData.district_id,
@@ -906,7 +909,7 @@ export default function TripPlanForm() {
       return;
     }
     if (
-      formData.collection_type === "household_collection" &&
+      collectionModes.includes("household_collection") &&
       !formData.include_with_qr &&
       !formData.include_without_qr
     ) {
@@ -931,7 +934,7 @@ export default function TripPlanForm() {
       Swal.fire(t("common.warning"), "Trigger weight must be less than vehicle capacity.", "warning");
       return;
     }
-    if (!isAutoAssignMode && !validStops.length) {
+    if (!validStops.length) {
       Swal.fire(t("common.warning"), "Add at least one collection point stop.", "warning");
       return;
     }
@@ -963,20 +966,11 @@ export default function TripPlanForm() {
       is_auto_assign: formData.is_auto_assign,
       repeat_days: formData.is_auto_assign ? formData.repeat_days : [],
       collection_type: formData.collection_type,
-      collection_points: isAutoAssignMode
-        ? [{
-            collection_type: formData.collection_type,
-            collection_point_id: null,
-            bin_id: null,
-            customer_id: null,
-            sequence: 1,
-            is_active: true,
-          }]
-        : validStops.map((stop, index) => ({
-            collection_type: "bin_collection",
-            collection_point_id: stop.collection_point_id,
-            bin_id: stop.bin_id,
-            customer_id: null,
+      collection_points: validStops.map((stop, index) => ({
+            collection_type: stop.collection_type,
+            collection_point_id: stop.collection_type === "bin_collection" ? stop.collection_point_id : null,
+            bin_id: stop.collection_type === "bin_collection" ? stop.bin_id : null,
+            customer_id: stop.collection_type === "bin_collection" ? null : (stop.customer_id || null),
             sequence: index + 1,
             is_active: stop.is_active,
           })),
@@ -1100,7 +1094,6 @@ export default function TripPlanForm() {
             <div><Label>Max Vehicle Capacity (kg)</Label><Input type="number" min={1} required value={formData.max_vehicle_capacity_kg} onChange={(e) => setField("max_vehicle_capacity_kg")(e.target.value)} /><FieldError message={fieldErrors.max_vehicle_capacity_kg} /></div>
             <div><Label>Trigger Weight (kg)</Label><Input type="number" min={0} required value={formData.trip_trigger_weight_kg} onChange={(e) => setField("trip_trigger_weight_kg")(e.target.value)} /><FieldError message={fieldErrors.trip_trigger_weight_kg} /></div>
             <div><Label>Status</Label><Select value={formData.status} onChange={setField("status")} options={statusOptions} disabled={loading} /></div>
-            <div><Label>Approval Status</Label><Select value={formData.approval_status} onChange={setField("approval_status")} options={approvalStatusOptions} disabled={loading} /></div>
           </div>
 
           <div className="space-y-3 rounded-lg border border-gray-200 bg-white p-4">
@@ -1109,111 +1102,120 @@ export default function TripPlanForm() {
                 <h2 className="text-base font-semibold text-gray-800">Collection Points</h2>
                 <p className="text-sm text-gray-500">Add all stops for this trip plan before saving.</p>
               </div>
-              <div className="flex items-end gap-3">
-                <div className="w-64">
+              <div className="w-full max-w-md">
                   <Label>Collection Mode</Label>
-                  <Select
-                    value={formData.collection_type}
-                    onChange={handleCollectionModeChange}
+                  <MultiSelect
+                    value={collectionModes}
+                    onChange={(event) => handleCollectionModesChange(
+                      (Array.isArray(event.value) ? event.value : []).map(String),
+                    )}
                     options={collectionModeOptions}
+                    optionLabel="label"
+                    optionValue="value"
+                    maxSelectedLabels={0}
+                    selectedItemsLabel="{0} modes selected"
+                    placeholder="Select collection modes"
                     disabled={loading || !projectId}
+                    className="!flex !h-10 !w-full !items-center !rounded-md !border !border-gray-300 !bg-white !px-3 !py-2 !text-sm !shadow-none"
                   />
-                </div>
-                {formData.collection_type === "bin_collection" && (
-                  <button type="button" onClick={addStop} disabled={loading || !projectId} className="rounded-lg bg-green-custom px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
-                    Add Stop
-                  </button>
-                )}
               </div>
             </div>
 
-            {formData.collection_type !== "bin_collection" ? (
-              <div className="space-y-3">
-                {formData.collection_type === "household_collection" && (
-                  <div className="flex flex-wrap items-center gap-6 rounded-md border border-gray-200 bg-gray-50 px-4 py-3">
-                    <span className="text-sm font-medium text-gray-700">Customer type</span>
-                    <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-700">
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4 accent-green-600"
-                        checked={formData.include_with_qr}
-                        onChange={(e) =>
-                          setFormData((prev) => ({ ...prev, include_with_qr: e.target.checked }))
-                        }
-                      />
-                      With QR
-                    </label>
-                    <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-700">
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4 accent-green-600"
-                        checked={formData.include_without_qr}
-                        onChange={(e) =>
-                          setFormData((prev) => ({ ...prev, include_without_qr: e.target.checked }))
-                        }
-                      />
-                      Without QR
-                    </label>
-                    {!formData.include_with_qr && !formData.include_without_qr && (
-                      <span className="text-xs text-red-600">Select at least one.</span>
-                    )}
+            <div className="space-y-4">
+              {collectionModes.includes("household_collection") && (
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-4">
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <h3 className="font-semibold text-emerald-900">Household Collection</h3>
+                      <p className="text-sm text-emerald-800">Eligible household customers are assigned automatically from the selected location.</p>
+                    </div>
+                    <div className="flex items-center gap-4 text-sm text-gray-700">
+                      <label className="flex cursor-pointer items-center gap-2"><input type="checkbox" className="h-4 w-4 accent-green-600" checked={formData.include_with_qr} onChange={(e) => setFormData((prev) => ({ ...prev, include_with_qr: e.target.checked }))} />With QR</label>
+                      <label className="flex cursor-pointer items-center gap-2"><input type="checkbox" className="h-4 w-4 accent-green-600" checked={formData.include_without_qr} onChange={(e) => setFormData((prev) => ({ ...prev, include_without_qr: e.target.checked }))} />Without QR</label>
+                    </div>
                   </div>
-                )}
-
-                <div className="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-gray-700">
-                  {formData.panchayat_id || formData.zone_id ? (
-                    <>
-                      <span className="font-semibold text-green-700">
-                        All {autoAssignCustomers.length} {formData.collection_type === "bulk_waste_collection" ? "bulk-waste-generator" : "household"} customer{autoAssignCustomers.length === 1 ? "" : "s"}
-                      </span>{" "}
-                      in this ward/local body will be auto-assigned as stops for this trip — no manual list needed.
-                    </>
-                  ) : (
-                    `Select a Zone or PLB (Panchayat) first — every ${formData.collection_type === "bulk_waste_collection" ? "bulk-waste-generator" : "household"} customer under it will be auto-assigned as a stop.`
+                  {!formData.include_with_qr && !formData.include_without_qr && <p className="text-xs text-red-600">Select at least one customer type.</p>}
+                  <p className="mt-3 rounded-md bg-white/70 px-3 py-2 text-sm text-emerald-900">
+                    {formData.panchayat_id || formData.zone_id
+                      ? `${autoAssignCustomersByMode.household.length} household customer${autoAssignCustomersByMode.household.length === 1 ? "" : "s"} will be auto-assigned.`
+                      : "Select a Zone or PLB (Panchayat) to preview eligible household customers."}
+                  </p>
+                  {autoAssignCustomersByMode.household.length > 0 && (
+                    <div className="mt-3 overflow-hidden rounded-md border border-emerald-200 bg-white">
+                      <div className="flex items-center justify-between bg-emerald-100/60 px-3 py-2 text-sm font-semibold text-emerald-900">
+                        <span>Eligible household customers</span><span>{autoAssignCustomersByMode.household.length}</span>
+                      </div>
+                      <div className="max-h-48 overflow-y-auto">
+                        <table className="w-full text-left text-sm">
+                          <thead className="sticky top-0 bg-white text-xs text-gray-500"><tr><th className="px-3 py-2">Customer</th><th className="px-3 py-2">Ward</th><th className="px-3 py-2">QR</th></tr></thead>
+                          <tbody>{autoAssignCustomersByMode.household.map((customer, index) => (
+                            <tr key={recordId(customer) || index} className="border-t border-gray-100"><td className="px-3 py-2">{customer?.customer_name ?? customer?.name ?? recordId(customer)}</td><td className="px-3 py-2">{customer?.ward?.ward_name ?? customer?.ward_name ?? "—"}</td><td className="px-3 py-2">{customer?.is_without_qr ? "Without QR" : "With QR"}</td></tr>
+                          ))}</tbody>
+                        </table>
+                      </div>
+                    </div>
                   )}
                 </div>
-
-                {(formData.panchayat_id || formData.zone_id) && autoAssignCustomers.length > 0 && (
-                  <div className="overflow-hidden rounded-md border border-gray-200">
-                    <div className="flex items-center justify-between border-b border-gray-200 bg-gray-50 px-4 py-2 text-sm font-semibold text-gray-700">
-                      <span>Customers in scope</span>
-                      <span className="rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-semibold text-green-700">
-                        {autoAssignCustomers.length}
-                      </span>
+              )}
+              {collectionModes.includes("bulk_waste_collection") && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-4">
+                  <h3 className="font-semibold text-amber-900">Bulk Waste Collection</h3>
+                  <p className="mt-1 text-sm text-amber-800">Bulk-waste-generator customers from the selected location are assigned automatically.</p>
+                  <p className="mt-3 rounded-md bg-white/70 px-3 py-2 text-sm text-amber-900">
+                    {formData.panchayat_id || formData.zone_id
+                      ? `${autoAssignCustomersByMode.bulk.length} bulk-waste generator${autoAssignCustomersByMode.bulk.length === 1 ? "" : "s"} will be auto-assigned.`
+                      : "Select a Zone or PLB (Panchayat) to preview eligible bulk-waste generators."}
+                  </p>
+                  {autoAssignCustomersByMode.bulk.length > 0 && (
+                    <div className="mt-3 overflow-hidden rounded-md border border-amber-200 bg-white">
+                      <div className="flex items-center justify-between bg-amber-100/70 px-3 py-2 text-sm font-semibold text-amber-900">
+                        <span>Eligible bulk-waste generators</span><span>{autoAssignCustomersByMode.bulk.length}</span>
+                      </div>
+                      <div className="max-h-48 overflow-y-auto">
+                        <table className="w-full text-left text-sm">
+                          <thead className="sticky top-0 bg-white text-xs text-gray-500"><tr><th className="px-3 py-2">Customer</th><th className="px-3 py-2">Ward</th><th className="px-3 py-2">Address</th></tr></thead>
+                          <tbody>{autoAssignCustomersByMode.bulk.map((customer, index) => (
+                            <tr key={recordId(customer) || index} className="border-t border-gray-100"><td className="px-3 py-2">{customer?.customer_name ?? customer?.name ?? recordId(customer)}</td><td className="px-3 py-2">{customer?.ward?.ward_name ?? customer?.ward_name ?? "—"}</td><td className="px-3 py-2">{customer?.building_no ?? customer?.street ?? "—"}</td></tr>
+                          ))}</tbody>
+                        </table>
+                      </div>
                     </div>
-                    <div className="max-h-72 overflow-y-auto">
-                      <table className="w-full text-left text-sm">
-                        <thead className="sticky top-0 bg-white text-xs uppercase text-gray-500">
-                          <tr>
-                            <th className="px-4 py-2 font-medium">#</th>
-                            <th className="px-4 py-2 font-medium">Customer</th>
-                            <th className="px-4 py-2 font-medium">QR</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {autoAssignCustomers.map((customer, index) => (
-                            <tr key={recordId(customer) || index} className="border-t border-gray-100">
-                              <td className="px-4 py-2 text-gray-500">{index + 1}</td>
-                              <td className="px-4 py-2 text-gray-700">{customer?.customer_name ?? customer?.name ?? recordId(customer)}</td>
-                              <td className="px-4 py-2 text-gray-500">{customer?.is_without_qr ? "Without QR" : "With QR"}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+                  )}
+                </div>
+              )}
+              {collectionModes.includes("bin_collection") && (
+                <div className="rounded-lg border border-blue-200 bg-blue-50/40 p-4">
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                    <div><h3 className="font-semibold text-blue-900">Secondary Stops</h3><p className="text-sm text-blue-800">Add and arrange collection point and bin stops manually.</p></div>
+                    <button type="button" onClick={addStop} disabled={loading || !projectId} className="rounded-lg bg-green-custom px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Add Secondary Stop</button>
                   </div>
-                )}
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {stops.map((stop, index) => (
+                  {(() => {
+                    // Each collection point is one stop, however many of its
+                    // bins are picked (matches the list page's stop count).
+                    const activeBinStops = stops.filter(
+                      (stop) => stop.collection_type === "bin_collection" && stop.is_active && stop.collection_point_id
+                    );
+                    const pointCount = new Set(activeBinStops.map((stop) => stop.collection_point_id)).size;
+                    const binCount = activeBinStops.filter((stop) => stop.bin_id).length;
+                    return (
+                      <div className="mb-3 flex items-center justify-between rounded-md bg-white/70 px-3 py-2 text-sm text-blue-900">
+                        <span>
+                          {pointCount} secondary stop{pointCount === 1 ? "" : "s"} ({binCount} bin{binCount === 1 ? "" : "s"}) will be collected.
+                        </span>
+                        <span className="font-semibold">{pointCount}</span>
+                      </div>
+                    );
+                  })()}
+                {stops.filter((stop) => stop.collection_type === "bin_collection").map((stop, index) => {
+                  const stopIndex = stops.indexOf(stop);
+                  return (
                   <div
-                    key={index}
+                    key={stopIndex}
                     draggable
-                    onDragStart={() => setDraggedStopIndex(index)}
+                    onDragStart={() => setDraggedStopIndex(stopIndex)}
                     onDragOver={(event) => event.preventDefault()}
                     onDrop={() => {
-                      if (draggedStopIndex !== null) moveStop(draggedStopIndex, index);
+                      if (draggedStopIndex !== null) moveStop(draggedStopIndex, stopIndex);
                       setDraggedStopIndex(null);
                     }}
                     onDragEnd={() => setDraggedStopIndex(null)}
@@ -1225,7 +1227,7 @@ export default function TripPlanForm() {
                     </div>
                     <div>
                       <Label>Collection Point</Label>
-                      <Select value={stop.collection_point_id} onChange={(value) => setStop(index, { collection_point_id: value })} options={options.collectionPointsFor(index)} disabled={loading || !projectId || (!formData.zone_id && !formData.panchayat_id && formData.ward_ids.length === 0)} />
+                      <Select value={stop.collection_point_id} onChange={(value) => setStop(stopIndex, { collection_point_id: value })} options={options.collectionPointsFor(stopIndex)} disabled={loading || !projectId || (!formData.zone_id && !formData.panchayat_id && formData.ward_ids.length === 0)} />
                       {stop.collection_point_id && (
                         <p className="mt-1 min-h-5 text-xs text-gray-500">
                           {coordinateText(stop.collection_point_id) || "Lat: - | Long: -"}
@@ -1234,23 +1236,25 @@ export default function TripPlanForm() {
                     </div>
                     <div>
                       <Label>Bin</Label>
-                      <Select value={stop.bin_id} onChange={(value) => setStop(index, { bin_id: value })} options={binOptionsFor(stop.collection_point_id, stop.bin_id)} disabled={loading || !stop.collection_point_id} />
+                      <Select value={stop.bin_id} onChange={(value) => setStop(stopIndex, { bin_id: value })} options={binOptionsFor(stop.collection_point_id, stop.bin_id)} disabled={loading || !stop.collection_point_id} />
                     </div>
                     <div>
                       <Label>Active</Label>
                       <div className="flex h-10 items-center">
-                        <Switch checked={stop.is_active} onCheckedChange={(checked) => setStop(index, { is_active: checked })} />
+                        <Switch checked={stop.is_active} onCheckedChange={(checked) => setStop(stopIndex, { is_active: checked })} />
                       </div>
                     </div>
                     <div className="flex items-end">
-                      <button type="button" onClick={() => removeStop(index)} disabled={stops.length === 1} className="h-10 w-full rounded-lg border border-red-200 px-3 text-sm font-semibold text-red-600 disabled:cursor-not-allowed disabled:opacity-40">
+                      <button type="button" onClick={() => removeStop(stopIndex)} disabled={stops.length === 1} className="h-10 w-full rounded-lg border border-red-200 px-3 text-sm font-semibold text-red-600 disabled:cursor-not-allowed disabled:opacity-40">
                         Remove
                       </button>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
+          </div>
           </div>
 
           <div className="space-y-3 rounded-lg border border-gray-200 bg-white p-4">
@@ -1267,7 +1271,7 @@ export default function TripPlanForm() {
               </label>
               <p className="mt-1 text-xs text-gray-500">
                 When enabled, the daily trip scheduler auto-generates a Daily Trip Assignment for this
-                plan (and clones its stops) on each selected repeat day, once approved.
+                plan (and clones its stops) on each selected repeat day.
               </p>
             </div>
 

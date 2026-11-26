@@ -24,6 +24,7 @@ import { parseWithSchema, type FieldErrors } from "@/schemas/shared/parseFormErr
 import { FieldError } from "@/components/form/FieldError";
 import { FormSelect } from "@/components/common/FormSelect";
 import { PageLoader } from "@/components/ui/PageLoader";
+import { EvidenceImagePreview } from "@/components/common/EvidenceImagePreview";
 
 
 const extractError = (error: any): string | null => {
@@ -194,9 +195,22 @@ export default function BinCollectionEventForm() {
     driver_latitude: "",
     driver_longitude: "",
     notes: "",
+    status_evidence_image: null,
   });
   const [saving, setSaving] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!imageFile) {
+      setImagePreviewUrl(record?.status_evidence_image_url ?? null);
+      return;
+    }
+    const objectUrl = URL.createObjectURL(imageFile);
+    setImagePreviewUrl(objectUrl);
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [imageFile, record?.status_evidence_image_url]);
 
   /* ── raw lookup data ── */
   const [allAssignments, setAllAssignments] = useState<any[]>([]);
@@ -250,6 +264,7 @@ export default function BinCollectionEventForm() {
       driver_latitude: String(record.driver_latitude ?? ""),
       driver_longitude: String(record.driver_longitude ?? ""),
       notes: String(record.notes ?? ""),
+      status_evidence_image: null,
     }));
 
     if (assignmentId) setPendingAssignmentId(assignmentId);
@@ -535,6 +550,11 @@ export default function BinCollectionEventForm() {
     }
     setFieldErrors({});
 
+    if (form.status !== "Collected" && !imageFile && !record?.status_evidence_image_url) {
+      Swal.fire(t("common.warning"), t("admin.bin_collection_event.image_hint"), "warning");
+      return;
+    }
+
     if (!companyUniqueId || !projectId) {
       Swal.fire(t("common.warning"), t("common.missing_fields"), "warning");
       return;
@@ -557,11 +577,26 @@ export default function BinCollectionEventForm() {
       if (form.driver_longitude) payload.driver_longitude = form.driver_longitude;
       if (form.notes) payload.notes = form.notes;
 
-      if (isEdit && id) {
+      if (imageFile) {
+        const multipartPayload = new FormData();
+        Object.entries(payload).forEach(([key, value]) => {
+          if (value !== null && value !== undefined) multipartPayload.append(key, String(value));
+        });
+        multipartPayload.append("status_evidence_image", imageFile);
+        if (isEdit && id) {
+          await binCollectionEventApi.uploadUpdate(id, multipartPayload);
+        } else {
+          await binCollectionEventApi.upload(multipartPayload);
+        }
+      } else if (isEdit && id) {
         await binCollectionEventApi.update(id, payload);
-        Swal.fire({ icon: "success", title: t("common.success"), text: t("common.updated_success"), timer: 1500, showConfirmButton: false });
       } else {
         await binCollectionEventApi.create(payload);
+      }
+
+      if (isEdit && id) {
+        Swal.fire({ icon: "success", title: t("common.success"), text: t("common.updated_success"), timer: 1500, showConfirmButton: false });
+      } else {
         Swal.fire({ icon: "success", title: t("common.success"), text: t("common.added_success"), timer: 1500, showConfirmButton: false });
       }
       navigate(LIST_PATH, { state: { companyUniqueId, projectId } });
@@ -744,6 +779,27 @@ export default function BinCollectionEventForm() {
                 required={form.status === "Collected"}
               />
               <FieldError message={fieldErrors.collected_weight_kg} />
+            </div>
+          </div>
+
+
+          <div>
+            <Label>
+              {t("admin.bin_collection_event.image")}
+              {form.status !== "Collected" && <span className="text-red-500"> *</span>}
+            </Label>
+            <Input
+              type="file"
+              accept="image/*"
+              onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
+              required={form.status !== "Collected" && !record?.status_evidence_image_url}
+            />
+            <p className="mt-1 text-xs text-gray-500">{t("admin.bin_collection_event.image_hint")}</p>
+            <div className="mt-2">
+              <EvidenceImagePreview
+                url={imagePreviewUrl}
+                label={t("admin.bin_collection_event.image")}
+              />
             </div>
           </div>
 

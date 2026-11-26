@@ -77,6 +77,7 @@ const STATUS_STYLES: Record<string, string> = {
   "In Progress": "bg-yellow-100 text-yellow-800",
   Completed: "bg-green-100 text-green-800",
   Cancelled: "bg-red-100 text-red-800",
+  Expired: "bg-gray-200 text-gray-700",
 };
 
 const Badge = ({
@@ -1185,6 +1186,38 @@ export default function DailyTripAssignmentList() {
     }
   };
 
+  // Daily operations are deliberately explicit: Start stamps the actual
+  // start time and End closes the same assignment with its end time.  The
+  // server also checks the vehicle/crew queue, so a stale screen cannot start
+  // a later trip before its earlier trip has finished.
+  const changeTripStatus = async (
+    row: DailyTripAssignmentRecord,
+    nextStatus: "In Progress" | "Completed",
+  ) => {
+    try {
+      await api.patch(
+        `${adminEndpoints.dailyTripAssignment}/${row.unique_id}/status/`,
+        { status: nextStatus, expected_status: row.status },
+      );
+      await loadRows(first / rowsPerPage + 1, rowsPerPage, searchTerm, ordering);
+      Swal.fire({
+        icon: "success",
+        title: nextStatus === "In Progress" ? "Trip started" : "Trip closed",
+        text: nextStatus === "In Progress"
+          ? "Actual start time has been recorded."
+          : "Actual end time has been recorded.",
+        timer: 1500,
+        showConfirmButton: false,
+      });
+    } catch (err) {
+      Swal.fire({
+        icon: "error",
+        title: "Unable to update trip",
+        text: extractError(err) ?? String(err),
+      });
+    }
+  };
+
   const actionTemplate = (row: DailyTripAssignmentRecord) => {
     const rowId = row.unique_id ?? String((row as any).id ?? "");
     // One print icon for every row, whatever the trip collects: the
@@ -1214,6 +1247,24 @@ export default function DailyTripAssignmentList() {
         label: "Change Vehicle",
         icon: <i className="pi pi-car" />,
         onClick: () => void openChangeVehicle(row),
+      });
+    }
+
+    if (row.status === "Scheduled" && canEdit) {
+      extraActions.push({
+        key: "start-trip",
+        label: "Start Trip",
+        icon: <i className="pi pi-play" />,
+        onClick: () => void changeTripStatus(row, "In Progress"),
+      });
+    }
+
+    if (row.status === "In Progress" && canEdit) {
+      extraActions.push({
+        key: "end-trip",
+        label: "End Trip",
+        icon: <i className="pi pi-stop" />,
+        onClick: () => void changeTripStatus(row, "Completed"),
       });
     }
 

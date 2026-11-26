@@ -24,10 +24,10 @@ import { useCompanyProjectFilter } from "@/components/filters/useCompanyProjectF
 import { useDraftFilter } from "@/components/filters/useDraftFilter";
 import { combineFilters, useOptionFilter } from "@/components/filters/useOptionFilter";
 import { downloadRecordsPdf } from "@/utils/exportPdf";
-import { formatCollectionTime } from "@/utils/formatTime";
+import { formatTimeOnly } from "@/utils/formatTime";
 import { wasteTypeColorClass } from "@/utils/wasteTypeColors";
-import { EvidenceImagePreview } from "@/components/common/EvidenceImagePreview";
 import { useScreenAccess } from "@/contexts/screenPermission";
+import { confirmDeleteWithReason, withDeleteReason } from "@/utils/deleteReason";
 
 const extractError = (error: unknown): string | null => {
   const data = (error as any)?.response?.data;
@@ -134,7 +134,7 @@ const N = "admin.bin_collection_event.";
 export default function BinCollectionEventList() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { canAdd } = useScreenAccess();
+  const { canAdd, canEdit } = useScreenAccess();
 
   const location = useLocation();
   const restoredState = location.state as {
@@ -315,7 +315,7 @@ export default function BinCollectionEventList() {
       [t("common.vehicle")]: r._vehicle,
       [t(`${N}weight_kg`)]: r.collected_weight_kg ?? "-",
       [t(`${N}collection_date`)]: r.collection_date,
-      [t(`${N}collection_time`)]: formatCollectionTime(r.created_at),
+      [t(`${N}collection_time`)]: formatTimeOnly(r.collection_time),
       [t("common.status")]: t(statusLabelKey(r.status ?? "Collected"), {
         defaultValue: r.status ?? "Collected",
       }),
@@ -532,11 +532,20 @@ export default function BinCollectionEventList() {
             <StackCell
               primary={formatDate(row.collection_date)}
               lines={[
-                { icon: "pi-clock", value: formatCollectionTime(row.created_at) },
-                { label: t(`${N}weight_kg`), value: row.collected_weight_kg },
+                { icon: "pi-clock", value: formatTimeOnly(row.collection_time) },
               ]}
             />
           )}
+        />
+        <Column
+          field="collected_weight_kg"
+          header={t(`${N}weight_kg`)}
+          style={{ width: "11%" }}
+          body={(row: BinCERecord) =>
+            row.collected_weight_kg != null && row.collected_weight_kg !== ""
+              ? formatKg(Number(row.collected_weight_kg))
+              : "-"
+          }
         />
         <Column
           field="status"
@@ -547,14 +556,6 @@ export default function BinCollectionEventList() {
           body={(row: BinCERecord) => (
             <StackCell
               primary={<StatusBadge value={row.status} />}
-              lines={[
-                row.status_evidence_image_url ? (
-                  <EvidenceImagePreview
-                    url={row.status_evidence_image_url}
-                    label={t(`${N}evidence_label`, { id: row.unique_id ?? "" })}
-                  />
-                ) : null,
-              ]}
             />
           )}
         />
@@ -564,12 +565,31 @@ export default function BinCollectionEventList() {
           body={(row: BinCERecord) => (
             <div className="flex justify-center">
               <ActionMenu
-                editLabel={t("common.view")}
-                onEdit={() =>
+                onEdit={canEdit ? () =>
                   navigate(VIEW_PATH(row.unique_id ?? ""), {
                     state: { companyUniqueId, projectId },
                   })
-                }
+                : undefined}
+                onDelete={canEdit ? async () => {
+                  const reason = await confirmDeleteWithReason();
+                  if (reason === null) return;
+                  try {
+                    await binCollectionEventApi.delete(row.unique_id ?? "", withDeleteReason(reason));
+                    Swal.fire({
+                      icon: "success",
+                      title: t("common.deleted_success"),
+                      timer: 1500,
+                      showConfirmButton: false,
+                    });
+                    loadRecords();
+                  } catch (err) {
+                    Swal.fire({
+                      icon: "error",
+                      title: t("common.delete_failed"),
+                      text: extractError(err) ?? t("common.delete_failed"),
+                    });
+                  }
+                } : undefined}
               />
             </div>
           )}

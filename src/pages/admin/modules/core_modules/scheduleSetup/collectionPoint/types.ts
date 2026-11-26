@@ -16,7 +16,7 @@ export type WardOption = WithCityIdOption & { panchayatId: string; zoneId: strin
 
 export type UnknownRecord = Record<string, unknown>;
 
-export type CollectionPointCollectionType = "bin_collection" | "bulk_waste_collection";
+export type CollectionPointCollectionType = "bin_collection";
 
 import type { FilterMatchMode } from "primereact/api";
 

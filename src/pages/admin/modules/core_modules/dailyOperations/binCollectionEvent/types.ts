@@ -18,6 +18,7 @@ export type FormState = {
   driver_latitude: string;
   driver_longitude: string;
   notes: string;
+  status_evidence_image?: File | null;
 };
 
 export type TableFilters = {
@@ -59,6 +60,7 @@ export type BinCERecord = {
   driver_longitude?: string | number | null;
   status_evidence_image_url?: string | null;
   notes?: string | null;
+  collection_time?: string | null;
   created_at?: string;
   company_name?: string;
   company_id?: string;
