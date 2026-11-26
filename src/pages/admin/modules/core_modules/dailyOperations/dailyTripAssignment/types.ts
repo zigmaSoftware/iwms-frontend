@@ -131,7 +131,13 @@ export type DailyTripAssignmentRecord = {
 export type DailyTripHouseholdCollectionInline = {
   unique_id?: string;
   customer_id?: string;
-  customer?: NamedRef & { customer_name?: string; building_no?: string; street?: string };
+  customer?: NamedRef & {
+    customer_name?: string;
+    building_no?: string;
+    street?: string;
+    waste_types?: { unique_id?: string; waste_type_name?: string }[];
+  };
+  collection_type?: string;
   sequence?: number;
   is_collected?: boolean;
   collected_at?: string | null;

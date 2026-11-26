@@ -165,22 +165,49 @@ const COLLECTION_TYPE_STYLES: Record<string, string> = {
   bulk_waste_collection: "bg-purple-100 text-purple-800",
 };
 
+// A plan can mix modes (secondary bins + household + bulk). The plan's own
+// collection_type only holds the first one, so derive the full set from its
+// stop rows, falling back to collection_type when no stops are loaded.
+const COLLECTION_TYPE_ORDER = ["bin_collection", "household_collection", "bulk_waste_collection"];
+
+const collectionTypesOf = (row: TripPlanRecord): string[] => {
+  const stops = Array.isArray(row.plan_collection_points) ? row.plan_collection_points : [];
+  const types = new Set(
+    stops.map((s: any) => String(s?.collection_type ?? "bin_collection")),
+  );
+  if (types.size === 0 && row.collection_type) types.add(row.collection_type);
+  return Array.from(types).sort(
+    (a, b) => COLLECTION_TYPE_ORDER.indexOf(a) - COLLECTION_TYPE_ORDER.indexOf(b),
+  );
+};
+
 const collectionTypeDisplay = (row: TripPlanRecord): string =>
   asDisplayText(row._collection_type) ||
-  COLLECTION_TYPE_LABELS[row.collection_type ?? ""] ||
-  row.collection_type ||
-  "";
+  collectionTypesOf(row)
+    .map((type) => COLLECTION_TYPE_LABELS[type] ?? type)
+    .join(", ");
 
 const CollectionTypeBadge = (row: TripPlanRecord) => {
-  const label = collectionTypeDisplay(row) || "Unknown";
-  const colorClass =
-    COLLECTION_TYPE_STYLES[row.collection_type ?? ""] ??
-    "bg-gray-100 text-gray-500";
+  const types = collectionTypesOf(row);
+  if (types.length === 0) {
+    return (
+      <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-gray-100 text-gray-500">
+        Unknown
+      </span>
+    );
+  }
   return (
-    <span
-      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${colorClass}`}
-    >
-      {label}
+    <span className="inline-flex flex-wrap gap-1">
+      {types.map((type) => (
+        <span
+          key={type}
+          className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+            COLLECTION_TYPE_STYLES[type] ?? "bg-gray-100 text-gray-500"
+          }`}
+        >
+          {COLLECTION_TYPE_LABELS[type] ?? type}
+        </span>
+      ))}
     </span>
   );
 };
@@ -561,10 +588,9 @@ export default function TripPlanList() {
           _stop_count: rawStopCountText(record),
           _driver: record.staff_template?.driver ?? "",
           _operator: record.staff_template?.operator ?? "",
-          _collection_type:
-            COLLECTION_TYPE_LABELS[record.collection_type ?? ""] ??
-            record.collection_type ??
-            "",
+          _collection_type: collectionTypesOf(record)
+            .map((type) => COLLECTION_TYPE_LABELS[type] ?? type)
+            .join(", "),
         })),
     [rawRows, collectionType, autoAssign],
   );
@@ -645,7 +671,6 @@ export default function TripPlanList() {
         "Start Time": time12h(record.scheduled_time),
         "Auto Assign": record.is_auto_assign ? "Auto" : "Manual",
         "Collection Type": collectionTypeDisplay(record),
-        Approval: record.approval_status ?? "-",
         Status: record.status ?? "-",
       };
 
@@ -852,12 +877,6 @@ export default function TripPlanList() {
               ]}
             />
           )}
-        />
-        <Column
-          field="approval_status"
-          header="Approval"
-          sortable
-          style={{ width: "9%" }}
         />
         <Column header="Status" body={statusBody} style={{ width: "8%" }} />
         <Column

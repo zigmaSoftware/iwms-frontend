@@ -752,7 +752,7 @@ export default function AlternativeStaffTemplateForm() {
             {showField("company_id") && (
               <div>
                 <Label htmlFor="company_id">
-                  {t("admin.nav.company") || "Company"}
+                  {t("admin.nav.company")}
                   <span className="text-red-500 ml-1">*</span>
                 </Label>
                 <Select
@@ -760,7 +760,7 @@ export default function AlternativeStaffTemplateForm() {
                   value={selectedCompanyId}
                   options={companyOptions}
                   placeholder={
-                    t("admin.nav.company_placeholder") || "Select company"
+                    t("admin.nav.company_placeholder")
                   }
                   onChange={(value) => {
                     setSelectedCompanyId(value);
@@ -781,7 +781,7 @@ export default function AlternativeStaffTemplateForm() {
             {showField("project_id") && (
               <div>
                 <Label htmlFor="project_id">
-                  {t("admin.nav.project") || "Project"}
+                  {t("admin.nav.project")}
                   <span className="text-red-500 ml-1">*</span>
                 </Label>
                 <Select
@@ -789,7 +789,7 @@ export default function AlternativeStaffTemplateForm() {
                   value={selectedProjectId}
                   options={projectOptions}
                   placeholder={
-                    t("admin.nav.project_placeholder") || "Select project"
+                    t("admin.nav.project_placeholder")
                   }
                   onChange={(value) => {
                     setSelectedProjectId(value);
@@ -826,7 +826,7 @@ export default function AlternativeStaffTemplateForm() {
             {showField("from_date") && (
               <div>
                 <Label>
-                  {t("admin.reports.trip_summary.filters.from_date") || "From Date"}
+                  {t("admin.alternative_staff_template.from_date")}
                   <span className="text-red-500 ml-1">*</span>
                 </Label>
                 <InputField
@@ -846,7 +846,7 @@ export default function AlternativeStaffTemplateForm() {
             {showField("to_date") && (
               <div>
                 <Label>
-                  {t("admin.reports.trip_summary.filters.to_date") || "To Date"}
+                  {t("admin.alternative_staff_template.to_date")}
                   <span className="text-red-500 ml-1">*</span>
                 </Label>
                 <InputField
@@ -887,7 +887,7 @@ export default function AlternativeStaffTemplateForm() {
             {showField("driver") && (
               <div>
                 <Label>
-                  {t("admin.staff_template.primary_driver") || "Driver"}
+                  {t("admin.alternative_staff_template.primary_driver")}
                   <span className="text-red-500 ml-1">*</span>
                 </Label>
                 <Select
@@ -908,7 +908,7 @@ export default function AlternativeStaffTemplateForm() {
             {showField("operator") && (
               <div>
                 <Label>
-                  {t("admin.staff_template.primary_operator") || "Operator"}
+                  {t("admin.alternative_staff_template.primary_operator")}
                   <span className="text-red-500 ml-1">*</span>
                 </Label>
                 <Select
@@ -929,7 +929,7 @@ export default function AlternativeStaffTemplateForm() {
             {showField("extra_operator") && (
               <div>
                 <Label>
-                  {t("admin.staff_template.extra_staff") || "Extra Operator"}
+                  {t("admin.alternative_staff_template.extra_staff")}
                 </Label>
                 <MultiSelect
                   value={formData.extra_operator}
@@ -975,8 +975,7 @@ export default function AlternativeStaffTemplateForm() {
             {showField("change_reason") && (
               <div>
                 <Label>
-                  {t("admin.alternative_staff_template.change_reason") ||
-                    "Change Reason"}
+                  {t("admin.alternative_staff_template.change_reason")}
                   <span className="text-red-500 ml-1">*</span>
                 </Label>
                 <InputField
@@ -1000,8 +999,7 @@ export default function AlternativeStaffTemplateForm() {
           {showField("change_remarks") && (
             <div>
               <Label>
-                {t("admin.alternative_staff_template.change_remarks") ||
-                  "Remarks"}
+                {t("admin.alternative_staff_template.change_remarks")}
               </Label>
               <InputField
                 value={formData.change_remarks}

@@ -75,6 +75,9 @@ const normalizeHouseholdRows = (rows: any[]): NonNullable<DailyTripLogRecord["ho
       return {
         unique_id: row?.unique_id,
         waste_collection_id: row?.waste_collection_id ?? null,
+        // Preserve the API's stop category so household and bulk-waste
+        // generator rows are rendered in their respective report sections.
+        collection_type: row?.collection_type,
         sequence: row?.sequence,
         customer_name: customerName,
         customer_unique_id: customerUniqueId,
@@ -161,6 +164,7 @@ type ImageCollectionRow = {
   waste_collection_id?: string | null;
   waste_type_breakdown?: WasteTypeBreakdownItem[];
   capture_images?: TripLogCaptureImage[];
+  status_evidence_image_url?: string | null;
 };
 
 const imageCollectionIds = (image: TripLogCaptureImage): string[] =>
@@ -376,11 +380,20 @@ export default function DailyTripLogReportPage() {
     );
   }
 
-  const cps = row.collection_points ?? [];
+  // Several stops can share one collection point (one per bin), so key each
+  // row by its own trip stop id rather than the collection point id.
+  const cps = (row.collection_points ?? []).map((cp, index) => ({
+    ...cp,
+    _row_key: cp.trip_collection_point_id ?? cp.unique_id ?? `cp-${index}`,
+  }));
   const hhCollections = row.household_collections ?? [];
-  // A trip is either a bin-collection trip or a household-collection trip —
-  // show whichever list is populated, never both, never an empty table.
-  const isHousehold = hhCollections.length > 0;
+  // Split household collections into household and bulk waste generator
+  const householdCollections = hhCollections.filter(
+    (hh) => hh.collection_type === "household_collection" || !hh.collection_type,
+  );
+  const bulkWasteGeneratorCollections = hhCollections.filter(
+    (hh) => hh.collection_type === "bulk_waste_collection",
+  );
   const st = row.staff_template;
   const wasteTypeName =
     Array.isArray(row.waste_types_detail) && row.waste_types_detail.length > 0
@@ -398,7 +411,10 @@ export default function DailyTripLogReportPage() {
         : [];
   const wardNames = wardSource.map((ward: any) => ward?.ward_name).filter(Boolean).join(", ");
   const householdImages = mapImagesToCollections(hhCollections, row.capture_images);
-  const collectionPointImages = mapImagesToCollections(cps, row.capture_images);
+  const collectionPointImages = mapImagesToCollections(
+    cps.map((cp) => ({ ...cp, unique_id: cp._row_key })),
+    row.capture_images,
+  );
 
   return (
     <div className="p-3">
@@ -477,17 +493,18 @@ export default function DailyTripLogReportPage() {
         )}
       </div>
 
-      {/* Collection Points OR Household Collections — never both */}
-      {isHousehold ? (
+      {/* Collection Points AND Household/Bulk Collections — displayed when data exists */}
+      {/* Household Collections */}
+      {householdCollections.length > 0 && (
         <div className="mb-6">
           <SectionLabel>
             {t("admin.daily_trip_log.household_collections")}
             <span className="ml-1 normal-case font-normal text-gray-400">
-              — {t("admin.daily_trip_log.collected_of_total", { collected: hhCollections.filter((hh) => hh.is_collected).length, total: hhCollections.length })}
+              — {t("admin.daily_trip_log.collected_of_total", { collected: householdCollections.filter((hh) => hh.is_collected).length, total: householdCollections.length })}
             </span>
           </SectionLabel>
           <DataTable
-            value={hhCollections}
+            value={householdCollections}
             dataKey="unique_id"
             className="p-datatable-sm"
             fitWidth
@@ -529,7 +546,62 @@ export default function DailyTripLogReportPage() {
             />
           </DataTable>
         </div>
-      ) : (
+      )}
+      {/* Bulk Waste Generator Collections */}
+      {bulkWasteGeneratorCollections.length > 0 && (
+        <div className="mb-6">
+          <SectionLabel>
+            {t("admin.daily_trip_log.bulk_waste_generator")}
+            <span className="ml-1 normal-case font-normal text-gray-400">
+              — {t("admin.daily_trip_log.collected_of_total", { collected: bulkWasteGeneratorCollections.filter((hh) => hh.is_collected).length, total: bulkWasteGeneratorCollections.length })}
+            </span>
+          </SectionLabel>
+          <DataTable
+            value={bulkWasteGeneratorCollections}
+            dataKey="unique_id"
+            className="p-datatable-sm"
+            fitWidth
+            localData
+            exportable={false}
+            paginator
+            rows={10}
+            rowsPerPageOptions={[10, 25, 50]}
+          >
+            <Column field="sequence" header="#" style={{ width: "5%" }} />
+            <Column
+              header={t("common.customer")}
+              style={{ width: "25%" }}
+              body={(hh: any) => hh.customer_name ?? hh.customer_unique_id ?? "-"}
+            />
+            <Column
+              header={t("admin.daily_trip_log.waste_breakdown")}
+              style={{ width: "35%" }}
+              body={(hh: any) => <WasteChips items={hh.waste_type_breakdown} />}
+            />
+            <Column
+              header={t("admin.daily_trip_log.export.collection_time")}
+              style={{ width: "13%" }}
+              body={(hh: any) => formatCollectionTime(hh.collected_at)}
+            />
+            <Column
+              header={t("admin.daily_trip_log.image")}
+              style={{ width: "11%" }}
+              body={(hh: any) => (
+                <CollectionImageLinks
+                  images={householdImages.get(hh.unique_id) ?? hh.capture_images}
+                />
+              )}
+            />
+            <Column
+              header={t("common.status")}
+              style={{ width: "11%" }}
+              body={(hh: any) => <StopStatusBadge value={hh.status} />}
+            />
+          </DataTable>
+        </div>
+      )}
+      {/* Collection Points */}
+      {cps.length > 0 && (
         <div className="mb-6">
           <SectionLabel>
             {t("admin.daily_trip_log.collection_points")}
@@ -541,7 +613,7 @@ export default function DailyTripLogReportPage() {
           </SectionLabel>
           <DataTable
             value={cps}
-            dataKey="unique_id"
+            dataKey="_row_key"
             className="p-datatable-sm"
             fitWidth
             localData
@@ -563,11 +635,29 @@ export default function DailyTripLogReportPage() {
               body={(cp: any) => <WasteChips items={cp.waste_type_breakdown} />}
             />
             <Column
+              header={t("admin.daily_trip_log.export.collection_time")}
+              style={{ width: "13%" }}
+              body={(cp: any) => formatCollectionTime(cp.collected_at)}
+            />
+            <Column
               header={t("admin.daily_trip_log.image")}
               style={{ width: "12%" }}
               body={(cp: any) => (
                 <CollectionImageLinks
-                  images={collectionPointImages.get(cp.unique_id) ?? cp.capture_images}
+                  images={
+                    (collectionPointImages.get(cp._row_key)?.length
+                      ? collectionPointImages.get(cp._row_key)
+                      : cp.capture_images?.length
+                        ? cp.capture_images
+                        : cp.status_evidence_image_url
+                          ? [{
+                              url: cp.status_evidence_image_url,
+                              trip_collection_point_id: cp.trip_collection_point_id,
+                              waste_type_name: cp.waste_type_breakdown?.[0]?.waste_type_name,
+                              image_type: "status_evidence",
+                            }]
+                          : undefined)
+                  }
                 />
               )}
             />

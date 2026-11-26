@@ -58,7 +58,6 @@ const toRecordList = (value: unknown): CollectionPointRecord[] => {
 // Translation keys (translated at render time).
 const COLLECTION_TYPE_LABEL_KEYS: Record<string, string> = {
   bin_collection: "admin.collection_point.type_bin_collection",
-  bulk_waste_collection: "admin.collection_point.type_bulk_waste_collection",
   household_collection: "admin.collection_point.type_household_collection",
 };
 
@@ -114,7 +113,6 @@ export default function CollectionPointListPage() {
     label: t("admin.collection_point.collection_type"),
     options: [
       { value: "bin_collection", label: t("admin.collection_point.type_bin_collection") },
-      { value: "bulk_waste_collection", label: t("admin.collection_point.type_bulk_waste_collection") },
     ],
     allLabel: t("admin.collection_point.all_types"),
     onAppliedChange: resetPage,

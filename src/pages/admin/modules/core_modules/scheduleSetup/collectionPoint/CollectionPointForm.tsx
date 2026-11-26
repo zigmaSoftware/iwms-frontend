@@ -106,7 +106,6 @@ const { listPath: ENC_LIST_PATH } = createCrudRoutePaths(encScheduleSetup, encCo
 // labelKey is translated at render time (module-level constant must not call t()).
 const COLLECTION_TYPE_OPTIONS: Array<{ value: string; labelKey: string }> = [
   { value: "bin_collection", labelKey: "admin.collection_point.type_bin_collection" },
-  { value: "bulk_waste_collection", labelKey: "admin.collection_point.type_bulk_waste_collection" },
 ];
 
 const COLLECTION_POINT_FIELDS: Record<string, string[]> = {
@@ -416,8 +415,7 @@ export default function CollectionPointForm() {
         setWardIds(_wardIds);
         setPendingWardIds(_wardIds);
         const recType = toStringOrEmpty(record.collection_type);
-        if (recType === "bulk_waste_collection") setCollectionType("bulk_waste_collection");
-        else setCollectionType("bin_collection");
+        setCollectionType("bin_collection");
         setCpName(toStringOrEmpty(record.cp_name ?? record.collection_point_name));
         setLatitude(toStringOrEmpty(record.latitude));
         setLongitude(toStringOrEmpty(record.longitude));
@@ -1040,7 +1038,7 @@ export default function CollectionPointForm() {
                 setCpName(e.target.value);
                 setFieldErrors((prev) => ({ ...prev, cp_name: "" }));
               }}
-              placeholder="CP 1"
+              placeholder={t("admin.collection_point.name_placeholder")}
               required
             />
             <FieldError message={fieldErrors.cp_name} />
@@ -1058,7 +1056,7 @@ export default function CollectionPointForm() {
                 setLatitude(e.target.value);
                 setFieldErrors((prev) => ({ ...prev, latitude: "" }));
               }}
-              placeholder="13.083000"
+              placeholder={t("admin.collection_point.latitude_placeholder")}
               required
             />
             <FieldError message={fieldErrors.latitude} />
@@ -1077,7 +1075,7 @@ export default function CollectionPointForm() {
                   setLongitude(e.target.value);
                   setFieldErrors((prev) => ({ ...prev, longitude: "" }));
                 }}
-                placeholder="80.271000"
+                placeholder={t("admin.collection_point.longitude_placeholder")}
                 required
               />
               <AutoDetectLocationButton
@@ -1174,7 +1172,7 @@ export default function CollectionPointForm() {
                 </Select>
               </div>
               <div>
-                <Label className="text-xs text-gray-500">Bin Name *</Label>
+                <Label className="text-xs text-gray-500">{t("admin.collection_point.bin_name")} *</Label>
                 <Input placeholder={t("admin.collection_point.bin_name_placeholder")} value={bin.bin_name} onChange={(e) => setNewBins((prev) => prev.map((b, i) => i === idx ? { ...b, bin_name: e.target.value } : b))} className="h-9 text-sm" />
               </div>
               <div>

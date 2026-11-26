@@ -155,6 +155,45 @@ const extractError = (error: any): string | null => {
 const binWasteTypeName = (bin: any): string =>
   String(bin?.wastetype_name ?? bin?.waste_type_name ?? bin?.wastetype_id?.waste_type_name ?? "") || "—";
 
+// Bulk generators have no common waste type — each customer has its own.
+const customerWasteTypeList = (customer: any): string[] =>
+  (Array.isArray(customer?.waste_types) ? customer.waste_types : [])
+    .map((w: any) => String(w?.waste_type_name ?? "").trim())
+    .filter(Boolean);
+
+const hasValue = (v: unknown) => v !== null && v !== undefined && String(v).trim() !== "";
+
+// Weight recorded for one waste type at a stop: the matching wet/dry/mixed/
+// sanitary figure, or the stop's total when it has only this one waste type.
+const weightForWasteType = (name: string, stop: any, singleType: boolean): string | null => {
+  const key = name.toLowerCase();
+  const field = key.includes("wet") ? "wet_waste"
+    : key.includes("dry") ? "dry_waste"
+    : key.includes("mixed") ? "mixed_waste"
+    : key.includes("sanitary") ? "sanitary_waste"
+    : null;
+  const value = field && hasValue(stop?.[field]) && Number(stop[field]) > 0
+    ? stop[field]
+    : singleType && hasValue(stop?.collected_weight_kg)
+      ? stop.collected_weight_kg
+      : null;
+  return value === null ? null : `${Number(value).toFixed(2)} kg`;
+};
+
+// "Waste type: weight" lines for a stop (weight shown as — until collected).
+const WasteTypeWeights = ({ names, stop }: { names: string[]; stop?: any }) => {
+  if (names.length === 0) return <>—</>;
+  return (
+    <div className="space-y-0.5">
+      {names.map((name) => (
+        <div key={name} className="whitespace-nowrap">
+          {name}: <span className="font-semibold">{(stop && weightForWasteType(name, stop, names.length === 1)) ?? "—"}</span>
+        </div>
+      ))}
+    </div>
+  );
+};
+
 const pointLabel = (point: DailyTripCollectionPointInline): string =>
   String(
     point.collection_point?.cp_name ??
@@ -749,6 +788,61 @@ export default function DailyTripAssignmentForm() {
     });
   }, [collectionPoints, formData.ward_ids, isEdit]);
 
+  // ---- Preview (new trip) helpers -------------------------------------
+  // Customers one household/bulk plan stop will expand to — mirrors the
+  // backend (_customers_for_household_stop + TripPlan.apply_qr_scope).
+  const customersForPreviewStop = (plan: any, stop: any): any[] => {
+    if (stop?.customer_id) {
+      return [stop.customer ?? { unique_id: stop.customer_id }];
+    }
+    const isBulk = stop?.collection_type === "bulk_waste_collection";
+    const includeWithQr = plan?.include_with_qr !== false;
+    const includeWithoutQr = plan?.include_without_qr !== false;
+    return previewCustomers
+      .filter((customer) => Boolean(customer.is_bulkwaste_generator) === isBulk)
+      .filter((customer) => customer.is_active !== false)
+      .filter((customer) => {
+        if (isBulk) return true;
+        return customer.is_without_qr ? includeWithoutQr : includeWithQr;
+      });
+  };
+
+  // Daily stop numbers run continuously in route order across all collection
+  // types (each household/bulk stop takes one number per customer), matching
+  // what the backend creates on save. Maps plan stop id -> first number.
+  const previewSequenceStart = (() => {
+    const map = new Map<string, number>();
+    const plan = tripPlanRecords.find(p => (p.unique_id ?? p.id) === formData.trip_plan_id);
+    const planStops: any[] = [...(plan?.plan_collection_points ?? [])]
+      .filter((stop: any) => stop?.is_active !== false)
+      .sort((a: any, b: any) => (Number(a?.sequence) || 0) - (Number(b?.sequence) || 0));
+    let next = 1;
+    // Bins at the same collection point are one stop and share its number.
+    const pointSequence = new Map<string, number>();
+    for (const stop of planStops) {
+      const key = String(stop?.unique_id ?? "");
+      if (stop?.collection_type === "bin_collection") {
+        if (!stop.collection_point_id || !stop.bin_id) continue;
+        const pointKey = String(stop.collection_point_id);
+        if (!pointSequence.has(pointKey)) {
+          pointSequence.set(pointKey, next);
+          next += 1;
+        }
+        map.set(key, pointSequence.get(pointKey)!);
+      } else if (["household_collection", "bulk_waste_collection"].includes(String(stop?.collection_type))) {
+        map.set(key, next);
+        next += customersForPreviewStop(plan, stop).length;
+      }
+    }
+    return map;
+  })();
+
+  // Each collection point is one stop, however many of its bins are listed.
+  const countCollectionPointStops = (points: any[]): number =>
+    new Set(
+      points.map((p: any) => String(p?.collection_point_id ?? p?.collection_point?.unique_id ?? p?.bin_id ?? ""))
+    ).size;
+
   // Keep assigned bins tracking in sync with collectionPoints state
   useEffect(() => {
     const newAssignedBins: Record<string, string[]> = {};
@@ -1162,8 +1256,8 @@ export default function DailyTripAssignmentForm() {
               {(visibleCollectionPoints.length > 0 || (!isEdit && formData.trip_plan_id)) && (
                 <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700">
                   {collectionPoints.length > 0
-                    ? t("admin.daily_trip_assignment.points_count", { count: visibleCollectionPoints.length })
-                    : t("admin.daily_trip_assignment.points_count_preview", { count: (tripPlanRecords.find(p => (p.unique_id ?? p.id) === formData.trip_plan_id)?.plan_collection_points ?? []).filter((s: any) => s.collection_type === "bin_collection" && s.bin_id).length })}
+                    ? t("admin.daily_trip_assignment.stops_count", { count: countCollectionPointStops(visibleCollectionPoints) })
+                    : t("admin.daily_trip_assignment.stops_count_preview", { count: countCollectionPointStops((tripPlanRecords.find(p => (p.unique_id ?? p.id) === formData.trip_plan_id)?.plan_collection_points ?? []).filter((s: any) => s.collection_type === "bin_collection" && s.bin_id && s.is_active !== false)) })}
                 </span>
               )}
             </div>
@@ -1171,9 +1265,10 @@ export default function DailyTripAssignmentForm() {
             {visibleCollectionPoints.length === 0 ? (
               (() => {
                 const plan = tripPlanRecords.find(p => (p.unique_id ?? p.id) === formData.trip_plan_id);
-                const previewStops: any[] = (plan?.plan_collection_points ?? []).filter(
-                  (s: any) => s.collection_type === "bin_collection" && s.bin_id
-                );
+                const previewStops: any[] = (plan?.plan_collection_points ?? [])
+                  .filter((s: any) => s.collection_type === "bin_collection" && s.bin_id && s.is_active !== false)
+                  .map((s: any) => ({ ...s, sequence: previewSequenceStart.get(String(s.unique_id ?? "")) ?? s.sequence }))
+                  .sort((a: any, b: any) => (Number(a.sequence) || 0) - (Number(b.sequence) || 0));
                 if (!isEdit && previewStops.length > 0) {
                   return (
                     <div className="overflow-x-auto">
@@ -1193,7 +1288,11 @@ export default function DailyTripAssignmentForm() {
                               <td className="px-4 py-3">{stop.sequence ?? i + 1}</td>
                               <td className="px-4 py-3">{stop.collection_point?.cp_name ?? stop.collection_point_id ?? "—"}</td>
                               <td className="px-4 py-3">{stop.bin?.bin_name ?? stop.bin_id ?? "—"}</td>
-                              <td className="px-4 py-3">{binWasteTypeName(stop.bin)}</td>
+                              <td className="px-4 py-3">
+                                {binWasteTypeName(stop.bin) === "—"
+                                  ? "—"
+                                  : <WasteTypeWeights names={[binWasteTypeName(stop.bin)]} />}
+                              </td>
                               <td className="px-4 py-3">
                                 <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800">{statusLabel("Pending")}</span>
                               </td>
@@ -1252,10 +1351,16 @@ export default function DailyTripAssignmentForm() {
                         <td className="px-4 py-3 font-medium text-gray-800">{pointLabel(point)}</td>
                         <td className="px-4 py-3 text-gray-600">{binLabel(point)}</td>
                         <td className="px-4 py-3 text-gray-600">
-                          {(point as any).waste_type_name ??
-                            binWasteTypeName(
-                              bins.find((bin) => String(bin?.unique_id ?? bin?.id ?? "") === currentBinId)
-                            )}
+                          {(() => {
+                            const name = (point as any).waste_type_name ??
+                              binWasteTypeName(
+                                bins.find((bin) => String(bin?.unique_id ?? bin?.id ?? "") === currentBinId)
+                              );
+                            // A bin holds one waste type, so its weight is the bin's collected weight.
+                            return name && name !== "—"
+                              ? <WasteTypeWeights names={[name]} stop={point} />
+                              : "—";
+                          })()}
                         </td>
                         <td className="px-4 py-3">
                           <Input
@@ -1293,11 +1398,32 @@ export default function DailyTripAssignmentForm() {
           </div>
 
           {/* Daily Trip Household Collection Points */}
-          {hasHouseholdStops && (
-            <div className="rounded-lg border border-purple-200">
+          {/* Customer stops are split into Household and Bulk Waste sections
+              (same design); each section only lists its own collection type. */}
+          {hasHouseholdStops && (["household_collection", "bulk_waste_collection"] as const).map((kind) => {
+            const isBulkSection = kind === "bulk_waste_collection";
+            const ofKind = (stop: any) => String(stop?.collection_type ?? "household_collection") === kind;
+            const sectionPlan = tripPlanRecords.find(p => (p.unique_id ?? p.id) === formData.trip_plan_id);
+            const sectionSourceStops: any[] = Array.isArray(sectionPlan?.plan_collection_points) ? sectionPlan.plan_collection_points : [];
+            const planHasKind = sectionSourceStops.length > 0
+              ? sectionSourceStops.some(ofKind)
+              : String(sectionPlan?.collection_type) === kind;
+            const kindStops = householdCollectionPoints.filter(ofKind);
+            // Hide a section the trip doesn't use (keep Household for the
+            // empty message when the trip has no customer stops at all).
+            const showSection = isEdit
+              ? kindStops.length > 0 || (!isBulkSection && householdCollectionPoints.length === 0)
+              : planHasKind || (!isBulkSection && !sectionSourceStops.some((s: any) => ["household_collection", "bulk_waste_collection"].includes(String(s?.collection_type))));
+            if (!showSection) return null;
+            return (
+            <div key={kind} className="rounded-lg border border-purple-200">
               <div className="flex items-center justify-between border-b border-purple-200 bg-purple-50 px-4 py-3">
                 <div>
-                  <h2 className="text-base font-semibold text-purple-800">{t("admin.daily_trip_assignment.customer_points_title")}</h2>
+                  <h2 className="text-base font-semibold text-purple-800">
+                    {isBulkSection
+                      ? t("admin.daily_trip_assignment.bulk_points_title")
+                      : t("admin.daily_trip_assignment.household_points_title")}
+                  </h2>
                   <p className="text-xs text-purple-600">
                     {isEdit
                       ? t("admin.daily_trip_assignment.customer_points_desc_edit")
@@ -1305,16 +1431,16 @@ export default function DailyTripAssignmentForm() {
                   </p>
                 </div>
                 {isEdit ? (
-                  householdCollectionPoints.length > 0 && (
+                  kindStops.length > 0 && (
                     <span className="rounded-full bg-purple-100 px-3 py-1 text-xs font-semibold text-purple-700">
-                      {t("admin.daily_trip_assignment.stops_count", { count: householdCollectionPoints.length })}
+                      {t("admin.daily_trip_assignment.stops_count", { count: kindStops.length })}
                     </span>
                   )
                 ) : (() => {
                   const plan = tripPlanRecords.find(p => (p.unique_id ?? p.id) === formData.trip_plan_id);
-                  const count = (plan?.plan_collection_points ?? []).filter((s: any) =>
-                    ["household_collection", "bulk_waste_collection"].includes(String(s.collection_type)) && s.customer_id
-                  ).length;
+                  const count = (plan?.plan_collection_points ?? [])
+                    .filter((s: any) => ofKind(s) && s.is_active !== false)
+                    .reduce((sum: number, s: any) => sum + customersForPreviewStop(plan, s).length, 0);
                   return count > 0 ? (
                     <span className="rounded-full bg-purple-100 px-3 py-1 text-xs font-semibold text-purple-700">
                       {t("admin.daily_trip_assignment.stops_count_preview", { count })}
@@ -1326,33 +1452,26 @@ export default function DailyTripAssignmentForm() {
               {!isEdit && (() => {
                 const plan = tripPlanRecords.find(p => (p.unique_id ?? p.id) === formData.trip_plan_id);
                 const sourceStops: any[] = Array.isArray(plan?.plan_collection_points) ? plan.plan_collection_points : [];
-                const effectiveSourceStops = sourceStops.length > 0
+                const effectiveSourceStops = (sourceStops.length > 0
                   ? sourceStops
                   : ["household_collection", "bulk_waste_collection"].includes(String(plan?.collection_type))
                     ? [{ collection_type: plan?.collection_type }]
-                    : [];
-                const previewStopsWithCustomers = sourceStops.filter((s: any) => s.customer_id);
+                    : []
+                ).filter(ofKind);
+                const previewStopsWithCustomers = sourceStops
+                  .filter((s: any) => s.customer_id && ofKind(s) && s.is_active !== false)
+                  .map((s: any) => ({ ...s, sequence: previewSequenceStart.get(String(s.unique_id ?? "")) ?? s.sequence }));
                 const needsExpansion = effectiveSourceStops.some((stop: any) =>
                   ["household_collection", "bulk_waste_collection"].includes(String(stop.collection_type)) && !stop.customer_id,
                 );
                 const previewHouseholdStops: any[] = needsExpansion && previewCustomers.length > 0
                   ? effectiveSourceStops
-                      .filter((stop) => ["household_collection", "bulk_waste_collection"].includes(String(stop.collection_type)))
-                      .flatMap((stop) => {
-                        const isBulk = stop.collection_type === "bulk_waste_collection";
-                        // Mirror backend TripPlan.apply_qr_scope: household plans keep only
-                        // With QR and/or Without QR customers per the plan's checkboxes.
-                        const isHouseholdPlan = String(plan?.collection_type) === "household_collection";
-                        const includeWithQr = plan?.include_with_qr !== false;
-                        const includeWithoutQr = plan?.include_without_qr !== false;
-                        return previewCustomers
-                          .filter((customer) => Boolean(customer.is_bulkwaste_generator) === isBulk)
-                          .filter((customer) => customer.is_active !== false)
-                          .filter((customer) => {
-                            if (!isHouseholdPlan) return true;
-                            const isWithoutQr = Boolean(customer.is_without_qr);
-                            return isWithoutQr ? includeWithoutQr : includeWithQr;
-                          })
+                      .filter((stop: any) =>
+                        ["household_collection", "bulk_waste_collection"].includes(String(stop.collection_type)) &&
+                        !stop.customer_id && stop.is_active !== false)
+                      .flatMap((stop: any) => {
+                        const startSequence = previewSequenceStart.get(String(stop.unique_id ?? "")) ?? stop.sequence ?? 1;
+                        return customersForPreviewStop(plan, stop)
                           .map((customer, index) => ({
                             ...stop,
                             unique_id: String(stop.unique_id ?? "preview") + "-" + String(customer.unique_id ?? customer.id ?? ""),
@@ -1364,12 +1483,14 @@ export default function DailyTripAssignmentForm() {
                               street: customer.street,
                               ward_id: customer.ward_id,
                               ward_name: customer.ward_name,
+                              waste_types: customer.waste_types,
                             },
-                            sequence: (stop.sequence ?? 1) + index,
+                            sequence: startSequence + index,
                           }));
                       })
                   : [];
-                const allPreviewStops = [...previewStopsWithCustomers, ...previewHouseholdStops];
+                const allPreviewStops = [...previewStopsWithCustomers, ...previewHouseholdStops]
+                  .sort((a: any, b: any) => (Number(a.sequence) || 0) - (Number(b.sequence) || 0));
                 if (allPreviewStops.length === 0) {
                   return (
                     <div className="px-4 py-6 text-sm text-gray-500">
@@ -1385,6 +1506,17 @@ export default function DailyTripAssignmentForm() {
                           <th className="px-4 py-3">{t("admin.daily_trip_assignment.seq")}</th>
                           <th className="px-4 py-3">{t("common.customer")}</th>
                           <th className="px-4 py-3">{t("common.address")}</th>
+                          <th className="px-4 py-3">{t("admin.daily_trip_assignment.weight_kg")}</th>
+                          {isBulkSection ? (
+                            <th className="px-4 py-3">{t("common.waste_type")}</th>
+                          ) : (
+                            <>
+                              <th className="px-4 py-3">{t("admin.daily_trip_assignment.wet_kg")}</th>
+                              <th className="px-4 py-3">{t("admin.daily_trip_assignment.dry_kg")}</th>
+                              <th className="px-4 py-3">{t("admin.daily_trip_assignment.mixed_kg")}</th>
+                              <th className="px-4 py-3">{t("admin.daily_trip_assignment.sanitary_kg")}</th>
+                            </>
+                          )}
                           <th className="px-4 py-3">{t("common.status")}</th>
                         </tr>
                       </thead>
@@ -1394,6 +1526,18 @@ export default function DailyTripAssignmentForm() {
                             <td className="px-4 py-3">{stop.sequence ?? i + 1}</td>
                             <td className="px-4 py-3">{stop.customer?.customer_name ?? stop.customer_id ?? "—"}</td>
                             <td className="px-4 py-3 text-xs">{[stop.customer?.building_no, stop.customer?.street].filter(Boolean).join(", ") || "—"}</td>
+                            {/* Weights are recorded during collection — empty in the preview. */}
+                            <td className="px-4 py-3">—</td>
+                            {isBulkSection ? (
+                              <td className="px-4 py-3"><WasteTypeWeights names={customerWasteTypeList(stop.customer)} /></td>
+                            ) : (
+                              <>
+                                <td className="px-4 py-3">—</td>
+                                <td className="px-4 py-3">—</td>
+                                <td className="px-4 py-3">—</td>
+                                <td className="px-4 py-3">—</td>
+                              </>
+                            )}
                             <td className="px-4 py-3">
                               <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800">{statusLabel("Pending")}</span>
                             </td>
@@ -1407,7 +1551,7 @@ export default function DailyTripAssignmentForm() {
               })()}
 
               {isEdit && (
-                householdCollectionPoints.length === 0 ? (
+                kindStops.length === 0 ? (
                   <div className="px-4 py-6 text-sm text-gray-500">{t("admin.daily_trip_assignment.no_customer_stops_attached")}</div>
                 ) : (
                   <div className="overflow-x-auto">
@@ -1418,16 +1562,22 @@ export default function DailyTripAssignmentForm() {
                           <th className="px-4 py-3">{t("common.customer")}</th>
                           <th className="px-4 py-3">{t("common.address")}</th>
                           <th className="px-4 py-3">{t("admin.daily_trip_assignment.weight_kg")}</th>
-                          <th className="px-4 py-3">{t("admin.daily_trip_assignment.wet_kg")}</th>
-                          <th className="px-4 py-3">{t("admin.daily_trip_assignment.dry_kg")}</th>
-                          <th className="px-4 py-3">{t("admin.daily_trip_assignment.mixed_kg")}</th>
-                          <th className="px-4 py-3">{t("admin.daily_trip_assignment.sanitary_kg")}</th>
+                          {isBulkSection ? (
+                            <th className="px-4 py-3">{t("common.waste_type")}</th>
+                          ) : (
+                            <>
+                              <th className="px-4 py-3">{t("admin.daily_trip_assignment.wet_kg")}</th>
+                              <th className="px-4 py-3">{t("admin.daily_trip_assignment.dry_kg")}</th>
+                              <th className="px-4 py-3">{t("admin.daily_trip_assignment.mixed_kg")}</th>
+                              <th className="px-4 py-3">{t("admin.daily_trip_assignment.sanitary_kg")}</th>
+                            </>
+                          )}
                           <th className="px-4 py-3">{t("common.collected")}</th>
                           <th className="px-4 py-3">{t("common.status")}</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100 bg-white">
-                        {householdCollectionPoints.map((stop, index) => {
+                        {kindStops.map((stop, index) => {
                           const stopKey = stop.unique_id ?? stop.customer_id;
                           const updateStop = (patch: Partial<DailyTripHouseholdCollectionInline>) =>
                             setHouseholdCollectionPoints((prev) => prev.map((item) =>
@@ -1443,10 +1593,16 @@ export default function DailyTripAssignmentForm() {
                               <td className="px-4 py-3">
                                 <Input type="number" min={0} step="0.01" value={String(stop.collected_weight_kg ?? "")} onChange={(e) => updateStop({ collected_weight_kg: e.target.value })} className="h-9 w-28" />
                               </td>
-                              <td className="px-4 py-3 text-gray-600">{stop.wet_waste ?? "—"}</td>
-                              <td className="px-4 py-3 text-gray-600">{stop.dry_waste ?? "—"}</td>
-                              <td className="px-4 py-3 text-gray-600">{stop.mixed_waste ?? "—"}</td>
-                              <td className="px-4 py-3 text-gray-600">{stop.sanitary_waste ?? "—"}</td>
+                              {isBulkSection ? (
+                                <td className="px-4 py-3 text-gray-600"><WasteTypeWeights names={customerWasteTypeList(stop.customer)} stop={stop} /></td>
+                              ) : (
+                                <>
+                                  <td className="px-4 py-3 text-gray-600">{stop.wet_waste ?? "—"}</td>
+                                  <td className="px-4 py-3 text-gray-600">{stop.dry_waste ?? "—"}</td>
+                                  <td className="px-4 py-3 text-gray-600">{stop.mixed_waste ?? "—"}</td>
+                                  <td className="px-4 py-3 text-gray-600">{stop.sanitary_waste ?? "—"}</td>
+                                </>
+                              )}
                               <td className="px-4 py-3">
                                 <input type="checkbox" checked={Boolean(stop.is_collected)} onChange={(e) => updateStop({ is_collected: e.target.checked, status: e.target.checked ? "Collected" : "Pending" })} className="h-4 w-4 rounded border-gray-300" />
                               </td>
@@ -1467,7 +1623,8 @@ export default function DailyTripAssignmentForm() {
                 )
               )}
             </div>
-          )}
+            );
+          })}
 
           {/* Actions */}
           <div className="flex justify-end gap-3">
